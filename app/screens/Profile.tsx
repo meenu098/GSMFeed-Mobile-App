@@ -229,6 +229,7 @@ export default function ProfileScreen() {
   const [userData, setUserData] = useState<any>(null);
   const [feed, setFeed] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isOwnProfile, setIsOwnProfile] = useState(false);
 
   const theme = {
     bg: isDark ? "#0B0E14" : "#F8FAFC",
@@ -245,7 +246,8 @@ export default function ProfileScreen() {
       const userString = await AsyncStorage.getItem("user");
       if (!userString) return;
       const loggedUser = JSON.parse(userString);
-      const identifier = userId || loggedUser.username;
+      const normalizedUserId = Array.isArray(userId) ? userId[0] : userId;
+      const identifier = normalizedUserId || loggedUser.username;
 
       // 1. Fetch Profile Details
       const profileRes = await fetch(
@@ -258,6 +260,22 @@ export default function ProfileScreen() {
 
       if (profileJson.status) {
         setUserData(profileJson.data);
+        const profileId = profileJson.data?.id;
+        const profileUsername = profileJson.data?.username;
+        const loggedId = loggedUser?.id;
+        const loggedUsername = loggedUser?.username;
+        const isOwn =
+          (profileId && loggedId && String(profileId) === String(loggedId)) ||
+          (profileUsername &&
+            loggedUsername &&
+            profileUsername === loggedUsername) ||
+          (normalizedUserId &&
+            loggedUsername &&
+            normalizedUserId === loggedUsername) ||
+          (normalizedUserId &&
+            loggedId &&
+            String(normalizedUserId) === String(loggedId));
+        setIsOwnProfile(Boolean(isOwn));
 
         // 2. Fetch User's Feed Posts using the ID from profile response
         const feedRes = await fetch(
@@ -327,19 +345,21 @@ export default function ProfileScreen() {
           </View>
           <Text style={styles.handleText}>@{userData?.username}</Text>
 
-          <TouchableOpacity
-            onPress={() => router.push("/screens/EditProfile")}
-            style={styles.editBtnContainer}
-          >
-            <LinearGradient
-              colors={["#8B5CF6", "#6366F1"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.editBtn}
+          {isOwnProfile ? (
+            <TouchableOpacity
+              onPress={() => router.push("/screens/EditProfile")}
+              style={styles.editBtnContainer}
             >
-              <Text style={styles.editBtnText}>Edit Profile</Text>
-            </LinearGradient>
-          </TouchableOpacity>
+              <LinearGradient
+                colors={["#8B5CF6", "#6366F1"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.editBtn}
+              >
+                <Text style={styles.editBtnText}>Edit Profile</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          ) : null}
         </View>
 
         <View style={styles.statsRow}>

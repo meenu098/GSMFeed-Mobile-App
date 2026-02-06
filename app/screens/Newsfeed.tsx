@@ -1,6 +1,7 @@
 import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   Dimensions,
@@ -52,6 +53,7 @@ const SpecItem = ({ label, value }: { label: string; value: any }) => (
 );
 
 const PostItem = ({ item, theme, onSave }: any) => {
+  const router = useRouter();
   const [activeIndex, setActiveIndex] = useState(0);
   const [isSaved, setIsSaved] = useState(item.is_saved === 1);
   const [showPicker, setShowPicker] = useState(false);
@@ -67,6 +69,12 @@ const PostItem = ({ item, theme, onSave }: any) => {
   const tradingData = item.trading_feeds?.[0] || {};
   const author = item.author || {};
   const mediaUrls = tradingData.images || item.media || [];
+
+  const handleProfilePress = () => {
+    const username = author?.username || author?.user_name || author?.id;
+    if (!username) return;
+    router.push({ pathname: "/screens/Profile", params: { userId: username } });
+  };
 
   // API: Record Interaction Stat
   const postInteractStatTrigger = useCallback(async () => {
@@ -210,40 +218,46 @@ const PostItem = ({ item, theme, onSave }: any) => {
       )}
 
       <View style={styles.postHeader}>
-        <View style={styles.avatarWrapper}>
-          <Image source={{ uri: author.avatar }} style={styles.avatar} />
-          {author.is_verified === 1 && (
-            <View style={styles.verifiedBadge}>
-              <MaterialCommunityIcons
-                name="check-decagram"
-                size={10}
-                color="white"
-              />
-            </View>
-          )}
-        </View>
-        <View style={styles.headerInfo}>
-          <Text style={[styles.userName, { color: theme.text }]}>
-            {author.name}
-          </Text>
-          <View style={styles.ratingRow}>
-            {[...Array(5)].map((_, i) => (
-              <Ionicons
-                key={i}
-                name="star"
-                size={10}
-                color={
-                  i < (author.rating?.averageRating || 0)
-                    ? "#FBBF24"
-                    : "#E5E7EB"
-                }
-              />
-            ))}
-            <Text style={styles.countryFlag}>
-              {author.country === "AE" ? "🇦🇪" : "🇮🇳"}
-            </Text>
+        <TouchableOpacity
+          style={styles.profileTapArea}
+          onPress={handleProfilePress}
+          activeOpacity={0.7}
+        >
+          <View style={styles.avatarWrapper}>
+            <Image source={{ uri: author.avatar }} style={styles.avatar} />
+            {author.is_verified === 1 && (
+              <View style={styles.verifiedBadge}>
+                <MaterialCommunityIcons
+                  name="check-decagram"
+                  size={10}
+                  color="white"
+                />
+              </View>
+            )}
           </View>
-        </View>
+          <View style={styles.headerInfo}>
+            <Text style={[styles.userName, { color: theme.text }]}>
+              {author.name}
+            </Text>
+            <View style={styles.ratingRow}>
+              {[...Array(5)].map((_, i) => (
+                <Ionicons
+                  key={i}
+                  name="star"
+                  size={10}
+                  color={
+                    i < (author.rating?.averageRating || 0)
+                      ? "#FBBF24"
+                      : "#E5E7EB"
+                  }
+                />
+              ))}
+              <Text style={styles.countryFlag}>
+                {author.country === "AE" ? "🇦🇪" : "🇮🇳"}
+              </Text>
+            </View>
+          </View>
+        </TouchableOpacity>
         <Text style={[styles.timeText, { color: theme.subText }]}>
           {item.created_at_human_short}
         </Text>
@@ -454,6 +468,11 @@ const styles = StyleSheet.create({
     position: "relative",
   },
   postHeader: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
+  profileTapArea: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
   avatarWrapper: { position: "relative" },
   avatar: { width: 44, height: 44, borderRadius: 22 },
   verifiedBadge: {
