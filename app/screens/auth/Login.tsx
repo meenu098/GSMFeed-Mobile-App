@@ -19,7 +19,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import FooterLinks from "../../../components/FooterLinks";
 import CONFIG from "../../../shared/config";
 import { setUser } from "../../../shared/storage";
-// Import your theme context
 import { useTheme } from "../../../shared/themeContext";
 
 const { width } = Dimensions.get("window");
@@ -27,7 +26,6 @@ const { width } = Dimensions.get("window");
 const Login = () => {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  // 1. Hook into your theme context
   const { isDark } = useTheme();
 
   const [email, setEmail] = useState("");
@@ -36,7 +34,6 @@ const Login = () => {
   const [secure, setSecure] = useState(true);
   const [loading, setLoading] = useState(false);
 
-  // 2. Define dynamic theme based on isDark
   const theme = {
     colors: {
       primary: "#3B66F5",
@@ -45,7 +42,6 @@ const Login = () => {
       border: isDark ? "rgba(255, 255, 255, 0.2)" : "rgba(0, 0, 0, 0.1)",
       text: isDark ? "#FFFFFF" : "#0F172A",
       textMuted: isDark ? "#94A3B8" : "#64748B",
-      // If Light mode, maybe use a lighter gradient or just a solid color
       gradient: isDark
         ? (["#1A0B2E", "#020205", "#050A1A"] as const)
         : (["#F1F5F9", "#F8FAFC", "#FFFFFF"] as const),
@@ -76,9 +72,25 @@ const Login = () => {
       const data = await response.json();
 
       if (!response.ok) {
+        if (
+          data?.message?.toLowerCase().includes("review") ||
+          data?.status === "pending"
+        ) {
+          router.replace("/under-review");
+          return;
+        }
+
         Alert.alert("Login Failed", data?.message || "Invalid credentials");
         return;
       }
+      if (
+        data?.data?.user?.status === "pending" ||
+        !data?.data?.user?.is_active
+      ) {
+        router.replace("/under-review");
+        return;
+      }
+
       await setUser(data.data);
       router.replace("/screens/Newsfeed");
     } catch (error) {

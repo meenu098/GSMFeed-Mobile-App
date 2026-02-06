@@ -93,7 +93,7 @@ const FormTemplate = ({
   const updateDetailField = (
     index: number,
     field: "label" | "value",
-    text: string
+    text: string,
   ) => {
     const updatedDetails = [...extraDetails];
     updatedDetails[index][field] = text;

@@ -1,10 +1,43 @@
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
-import React from "react";
-import { Platform, StatusBar, StyleSheet, Text, View } from "react-native";
+import { useRouter } from "expo-router";
+import React, { useEffect, useRef } from "react";
+import {
+  Animated,
+  Platform,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 export default function UnderReviewScreen() {
+  const router = useRouter();
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(scaleAnim, {
+          toValue: 1.03,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(scaleAnim, {
+          toValue: 1,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+      ]),
+    ).start();
+  }, []);
+
+  const handleBackToLogin = () => {
+    router.replace("/screens/auth/Login");
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar
@@ -41,6 +74,35 @@ export default function UnderReviewScreen() {
                 You will receive a notification once your access has been
                 granted.
               </Text>
+
+              {/* Animated Login Button */}
+              <Animated.View
+                style={[
+                  styles.buttonContainer,
+                  { transform: [{ scale: scaleAnim }] },
+                ]}
+              >
+                <TouchableOpacity
+                  onPress={handleBackToLogin}
+                  activeOpacity={0.9}
+                  style={styles.touchable}
+                >
+                  <LinearGradient
+                    colors={["#3B66F5", "#5C85FF"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.gradientButton}
+                  >
+                    <Text style={styles.buttonText}>Back to Login</Text>
+                    <Ionicons
+                      name="arrow-forward"
+                      size={18}
+                      color="#FFF"
+                      style={styles.buttonIcon}
+                    />
+                  </LinearGradient>
+                </TouchableOpacity>
+              </Animated.View>
             </View>
           </BlurView>
         </View>
@@ -50,27 +112,19 @@ export default function UnderReviewScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  contentWrapper: {
-    flex: 1,
-    justifyContent: "center",
-    padding: 25,
-  },
+  container: { flex: 1 },
+  contentWrapper: { flex: 1, justifyContent: "center", padding: 25 },
   glassWrapper: {
     borderRadius: 28,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.15)",
   },
-  blurContainer: {
-    padding: 35,
-    alignItems: "center",
-  },
+  blurContainer: { padding: 35, alignItems: "center" },
   innerCard: {
     alignItems: "center",
     backgroundColor: "transparent",
+    width: "100%",
   },
   iconCircle: {
     width: 100,
@@ -107,5 +161,26 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.5)",
     textAlign: "center",
     fontStyle: "italic",
+    marginBottom: 30,
   },
+  buttonContainer: { width: "100%", maxWidth: 200 },
+  touchable: {
+    borderRadius: 14,
+    overflow: "hidden",
+    elevation: 5,
+    shadowColor: "#3B66F5",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  gradientButton: {
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 14,
+  },
+  buttonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "700" },
+  buttonIcon: { marginLeft: 8 },
 });
