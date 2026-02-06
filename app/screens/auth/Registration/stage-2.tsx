@@ -19,17 +19,10 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-<<<<<<< HEAD:app/screens/auth/Registration/stage-2.tsx
 import FooterLinks from "../../../../components/FooterLinks";
 import CONFIG from "../../../../shared/config";
-import { useTheme } from "../../../../shared/themeContext";
 import { useRegistration } from "../../../../shared/RegistrationContext";
-=======
-import FooterLinks from "../../navigation/FooterLinks";
-import CONFIG from "../../utils/config";
-import { useRegistration } from "../../utils/RegistrationContext";
-import { useTheme } from "../../utils/themeContext";
->>>>>>> main:app/screens/Registration/stage-2.tsx
+import { useTheme } from "../../../../shared/themeContext";
 
 const { height } = Dimensions.get("window");
 
@@ -190,11 +183,7 @@ export default function RegistrationScreen2() {
       country: selectedCountry,
       phone_country_code: parseInt(String(dialCodeRaw), 10),
     });
-<<<<<<< HEAD:app/screens/auth/Registration/stage-2.tsx
     router.push("/screens/auth/Registration/stage-3");
-=======
-    router.push("/screens/Registration/stage-3");
->>>>>>> main:app/screens/Registration/stage-2.tsx
   };
 
   const canGoNext =

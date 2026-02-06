@@ -11,17 +11,10 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-<<<<<<< HEAD:app/screens/auth/Registration/stage-1.tsx
 import FooterLinks from "../../../../components/FooterLinks";
 import { BusinessMan, CompanySvg } from "../../../../components/icons/icons";
-import { useTheme } from "../../../../shared/themeContext";
 import { useRegistration } from "../../../../shared/RegistrationContext";
-=======
-import { BusinessMan, CompanySvg } from "../../../components/icons/icons";
-import FooterLinks from "../../navigation/FooterLinks";
-import { useRegistration } from "../../utils/RegistrationContext";
-import { useTheme } from "../../utils/themeContext";
->>>>>>> main:app/screens/Registration/stage-1.tsx
+import { useTheme } from "../../../../shared/themeContext";
 
 const { width } = Dimensions.get("window");
 
@@ -102,11 +95,7 @@ export default function RegistrationScreen1() {
               },
             ]}
             onPress={() =>
-<<<<<<< HEAD:app/screens/auth/Registration/stage-1.tsx
               handleSelection("business", "/screens/auth/Registration/stage-2")
-=======
-              handleSelection("business", "/screens/Registration/stage-2")
->>>>>>> main:app/screens/Registration/stage-1.tsx
             }
             activeOpacity={0.7}
           >
@@ -138,14 +127,10 @@ export default function RegistrationScreen1() {
               },
             ]}
             onPress={() =>
-<<<<<<< HEAD:app/screens/auth/Registration/stage-1.tsx
               handleSelection(
                 "individual",
                 "/screens/auth/UserRegistration/stage-1",
               )
-=======
-              handleSelection("individual", "/screens/UserRegistration/stage-1")
->>>>>>> main:app/screens/Registration/stage-1.tsx
             }
             activeOpacity={0.7}
           >
