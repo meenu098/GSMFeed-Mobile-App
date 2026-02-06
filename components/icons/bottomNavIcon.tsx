@@ -2,6 +2,7 @@ import { ClipPath, Defs, G, Path, Rect, Svg, SvgProps } from "react-native-svg";
 
 interface IconProps extends SvgProps {
   color?: string;
+  size?: number;
 }
 
 const Home = ({ color = "#000", ...props }: IconProps) => {
@@ -64,9 +65,23 @@ const Message = ({ color = "#000", ...props }: IconProps) => {
     </Svg>
   );
 };
-const Search = ({ color = "#000", ...props }: IconProps) => {
+const Search = ({
+  color = "#000",
+  size = 20,
+  width,
+  height,
+  ...props
+}: IconProps) => {
+  const finalWidth = width ?? size;
+  const finalHeight = height ?? size;
+
   return (
-    <Svg width="20" height="20" viewBox="0 0 20 20" {...props}>
+    <Svg
+      width={finalWidth}
+      height={finalHeight}
+      viewBox="2 2 16 16"
+      {...props}
+    >
       <Path
         d="m15.938 17-4.98-4.979a5.2 5.2 0 0 1-1.375.719A4.8 4.8 0 0 1 8 13q-2.084 0-3.542-1.458Q3 10.083 3 8q0-2.084 1.458-3.542Q5.917 3 8 3q2.084 0 3.542 1.458Q13 5.917 13 8a4.8 4.8 0 0 1-.26 1.583q-.261.75-.719 1.375L17 15.938zM8 11.5q1.458 0 2.479-1.021Q11.499 9.459 11.5 8q0-1.458-1.021-2.479Q9.459 4.501 8 4.5q-1.458 0-2.479 1.021Q4.501 6.541 4.5 8q0 1.458 1.021 2.479Q6.541 11.499 8 11.5"
         fill={props.fill || color}

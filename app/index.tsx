@@ -12,9 +12,9 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { SvgUri } from "react-native-svg";
 import { OpenAISvg } from "../components/icons/bottomNavIcon";
 import FooterLinks from "../components/FooterLinks";
+import WebSvg from "../components/WebSvg";
 import GradientText from "../shared/gradient";
 import ScreenWrapper from "../shared/screenWrapper";
 
@@ -77,7 +77,7 @@ const Index = () => {
               <Text style={styles.title}>Platform with</Text>
               <View style={styles.titleRow}>
                 <Text style={styles.title}>Verified Traders</Text>
-                <SvgUri
+                <WebSvg
                   uri="https://gsmfeed.com/images/icons/verifiedTraders.svg"
                   width={25}
                   height={25}
@@ -141,7 +141,7 @@ const Index = () => {
 
 const Feature = ({ uri, title, subtitle }: any) => (
   <View style={styles.featureItem}>
-    <SvgUri uri={uri} width={28} height={28} style={styles.icon} />
+    <WebSvg uri={uri} width={28} height={28} style={styles.icon} />
     <Text style={styles.featureTitle}>{title}</Text>
     <Text style={styles.featureSubtitle}>{subtitle}</Text>
   </View>

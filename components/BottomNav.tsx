@@ -12,9 +12,9 @@ import {
   View,
 } from "react-native";
 
+import { Home, Message, Search, User } from "../components/icons/bottomNavIcon";
 import CONFIG from "../shared/config";
 import { useTheme } from "../shared/themeContext";
-import { Home, Message, Search, User } from "../components/icons/bottomNavIcon";
 
 const { width } = Dimensions.get("window");
 
@@ -84,8 +84,7 @@ export default function BottomNav() {
           const updatedUser = { ...user, avatar: json.data.avatar };
           await AsyncStorage.setItem("user", JSON.stringify(updatedUser));
         }
-      } catch (error) {
-      }
+      } catch (error) {}
     };
 
     syncAvatar();

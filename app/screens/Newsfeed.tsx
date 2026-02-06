@@ -17,8 +17,12 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
-import { SvgUri } from "react-native-svg";
-
+import AngryIcon from "../../assets/reaction/angry.svg";
+import HahaIcon from "../../assets/reaction/haha.svg";
+import LikeIcon from "../../assets/reaction/like.svg";
+import LoveIcon from "../../assets/reaction/love.svg";
+import SadIcon from "../../assets/reaction/sad.svg";
+import WowIcon from "../../assets/reaction/wow.svg";
 import BottomNav from "../../components/BottomNav";
 import SidebarOverlay from "../../components/SidebarOverlay";
 import { AiIcon } from "../../components/icons/icons";
@@ -30,14 +34,13 @@ const { width } = Dimensions.get("window");
 const CARD_WIDTH = width - 30;
 const IMAGE_WIDTH = CARD_WIDTH - 30;
 
-const REACTION_BASE_URL = "https://app.gsmfeed.com/assets/svg/reaction";
 const REACTION_TYPES = [
-  { title: "like", imageName: "like.svg", color: "#3B66F5" },
-  { title: "love", imageName: "love.svg", color: "#EF4444" },
-  { title: "haha", imageName: "haha.svg", color: "#FBBF24" },
-  { title: "wow", imageName: "wow.svg", color: "#FBBF24" },
-  { title: "sad", imageName: "sad.svg", color: "#FBBF24" },
-  { title: "angry", imageName: "angry.svg", color: "#EA580C" },
+  { title: "like", Icon: LikeIcon, color: "#3B66F5" },
+  { title: "love", Icon: LoveIcon, color: "#EF4444" },
+  { title: "haha", Icon: HahaIcon, color: "#FBBF24" },
+  { title: "wow", Icon: WowIcon, color: "#FBBF24" },
+  { title: "sad", Icon: SadIcon, color: "#FBBF24" },
+  { title: "angry", Icon: AngryIcon, color: "#EA580C" },
 ];
 
 const SpecItem = ({ label, value }: { label: string; value: any }) => (
@@ -82,8 +85,7 @@ const PostItem = ({ item, theme, onSave }: any) => {
           body: JSON.stringify({ post_id: item.id }),
         },
       );
-    } catch (error) {
-    }
+    } catch (error) {}
   }, [item.id]);
 
   useEffect(() => {
@@ -121,8 +123,7 @@ const PostItem = ({ item, theme, onSave }: any) => {
             : result.data.total_likes;
         setTotalLikes(newCount || 0);
       }
-    } catch (error) {
-    }
+    } catch (error) {}
   };
 
   const activeReactionData = REACTION_TYPES.find((r) => r.title === myReaction);
@@ -202,11 +203,7 @@ const PostItem = ({ item, theme, onSave }: any) => {
               onPress={() => handleReact(r.title)}
               style={styles.pickerOption}
             >
-              <SvgUri
-                width="32"
-                height="32"
-                uri={`${REACTION_BASE_URL}/${r.imageName}`}
-              />
+              <r.Icon width={32} height={32} />
             </TouchableOpacity>
           ))}
         </View>
@@ -292,11 +289,9 @@ const PostItem = ({ item, theme, onSave }: any) => {
             delayLongPress={300}
           >
             {myReaction ? (
-              <SvgUri
-                width="22"
-                height="22"
-                uri={`${REACTION_BASE_URL}/${activeReactionData?.imageName}`}
-              />
+              activeReactionData?.Icon ? (
+                <activeReactionData.Icon width={22} height={22} />
+              ) : null
             ) : (
               <Ionicons name="thumbs-up-outline" size={22} color={theme.text} />
             )}
@@ -407,12 +402,7 @@ export default function NewsFeedScreen() {
             </LinearGradient>
           </TouchableOpacity>
         }
-        renderItem={({ item }) => (
-          <PostItem
-            item={item}
-            theme={theme}
-          />
-        )}
+        renderItem={({ item }) => <PostItem item={item} theme={theme} />}
         ListFooterComponent={<View style={{ height: 100 }} />}
       />
       {sidebarVisible && (
