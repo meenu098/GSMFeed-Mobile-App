@@ -1,23 +1,35 @@
-import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import {
+  Feather,
+  FontAwesome,
+  Ionicons,
+  MaterialCommunityIcons,
+} from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
+  ActivityIndicator,
+  Clipboard,
   Dimensions,
   FlatList,
   Image,
+  KeyboardAvoidingView,
+  Linking,
+  Modal,
   NativeScrollEvent,
   NativeSyntheticEvent,
-  SafeAreaView,
+  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   TouchableWithoutFeedback,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import AngryIcon from "../../assets/reaction/angry.svg";
 import HahaIcon from "../../assets/reaction/haha.svg";
 import LikeIcon from "../../assets/reaction/like.svg";
@@ -44,6 +56,64 @@ const REACTION_TYPES = [
   { title: "angry", Icon: AngryIcon, color: "#EA580C" },
 ];
 
+const stripHtml = (value: string) => {
+  if (!value) return "";
+  return value
+    .replace(/<\/a>(\S)/g, "</a> $1")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;|&#160;/g, " ")
+    .replace(/\ufeff/g, "")
+    .trim();
+};
+
+const escapeHtml = (value: string) =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+const escapeRegex = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const buildMentionAnchor = (username: string, id?: number | string) => {
+  const safeUsername = escapeHtml(username);
+  const dataId = id !== undefined ? ` data-id="${id}"` : ' data-id=""';
+  return `<a href="/profile/${safeUsername}" target="_blank" data-username="${safeUsername}" class="mention"${dataId} data-denotation-char="@" data-value="${safeUsername}">\ufeff<span contenteditable="false">@${safeUsername}</span>\ufeff</a>`;
+};
+
+const buildCommentHtml = (
+  value: string,
+  mentionIdMap: Map<string, number | string> = new Map(),
+  replyUsername?: string,
+) => {
+  const regex = /@([\w._-]+)/g;
+  let result = "";
+  let lastIndex = 0;
+  let match;
+  while ((match = regex.exec(value)) !== null) {
+    result += escapeHtml(value.slice(lastIndex, match.index));
+    const username = match[1];
+    const mentionId = mentionIdMap.get(username);
+    result += buildMentionAnchor(username, mentionId);
+    lastIndex = match.index + match[0].length;
+  }
+  result += escapeHtml(value.slice(lastIndex));
+  result = result.replace(/\n/g, "<br/>");
+
+  const hasReplyMention =
+    replyUsername &&
+    new RegExp(`(^|\\s)@${escapeRegex(replyUsername)}(\\s|$)`, "i").test(
+      value,
+    );
+  if (replyUsername && !hasReplyMention) {
+    const mentionId = mentionIdMap.get(replyUsername);
+    const prefix = buildMentionAnchor(replyUsername, mentionId);
+    result = `${prefix} ${result}`.trim();
+  }
+
+  return `<p>${result}</p>`;
+};
+
 const SpecItem = ({ label, value }: { label: string; value: any }) => (
   <View style={styles.specItem}>
     <Text style={styles.specLabel}>
@@ -52,12 +122,242 @@ const SpecItem = ({ label, value }: { label: string; value: any }) => (
   </View>
 );
 
+const CommentItem = ({
+  comment,
+  theme,
+  level = 0,
+  onReply,
+  onReact,
+  onTogglePicker,
+  activePickerId,
+  replyMap,
+  replyLoadingMap,
+  replyNextMap,
+  replyPageMap,
+  onLoadReplies,
+  onLoadMoreReplies,
+}: {
+  comment: any;
+  theme: any;
+  level?: number;
+  onReply?: (comment: any) => void;
+  onReact?: (comment: any, reaction: string) => void;
+  onTogglePicker?: (id: string) => void;
+  activePickerId?: string | null;
+  replyMap?: Record<string, any[]>;
+  replyLoadingMap?: Record<string, boolean>;
+  replyNextMap?: Record<string, string | null>;
+  replyPageMap?: Record<string, number>;
+  onLoadReplies?: (id: string) => void;
+  onLoadMoreReplies?: (id: string, nextPage: number) => void;
+}) => {
+  const author = comment?.author || {};
+  const content = stripHtml(comment?.content || "");
+  const commentId = String(comment?.id ?? "");
+  const childReplies =
+    replyMap?.[commentId] ?? comment?.comments ?? [];
+  const totalReplies = comment?.total_comments || 0;
+  const showViewReplies = totalReplies > 0 && childReplies.length === 0;
+  const loadingReplies = !!replyLoadingMap?.[commentId];
+  const hasMoreReplies = !!replyNextMap?.[commentId];
+  const currentPage = replyPageMap?.[commentId] || 1;
+  const bubbleBg = theme.isDark ? "#1E2430" : "#F1F5F9";
+  const activeReaction = comment?.my_reaction;
+  const reactionColor =
+    REACTION_TYPES.find((r) => r.title === activeReaction)?.color ||
+    theme.subText;
+  const reactionLabel = activeReaction
+    ? activeReaction.charAt(0).toUpperCase() + activeReaction.slice(1)
+    : "Like";
+  const ActiveReactionIcon =
+    REACTION_TYPES.find((r) => r.title === activeReaction)?.Icon || LikeIcon;
+  const normalizeCount = (value: any) => {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : 0;
+  };
+  const totalReactionsRaw = comment?.total_reactions;
+  const totalReactionsCount =
+    totalReactionsRaw && typeof totalReactionsRaw === "object"
+      ? normalizeCount(totalReactionsRaw.total)
+      : normalizeCount(totalReactionsRaw);
+
+  const renderCommentText = () => {
+    const parts = content.split(/(@[\w._-]+)/g);
+    return parts.map((part, idx) => {
+      if (part.startsWith("@")) {
+        return (
+          <Text key={`m-${comment.id}-${idx}`} style={styles.commentMention}>
+            {part}
+          </Text>
+        );
+      }
+      return <Text key={`t-${comment.id}-${idx}`}>{part}</Text>;
+    });
+  };
+
+  return (
+    <View>
+      <View style={[styles.commentItem, { marginLeft: level * 16 }]}>
+        <Image
+          source={{
+            uri:
+              author.avatar ||
+              "https://ui-avatars.com/api/?name=User&background=3B66F5&color=fff",
+          }}
+          style={styles.commentAvatar}
+        />
+        <View style={styles.commentBody}>
+          <View style={[styles.commentBubble, { backgroundColor: bubbleBg }]}>
+            <Text style={[styles.commentName, { color: theme.text }]}>
+              {author.name || author.username || "User"}
+            </Text>
+            <Text style={[styles.commentContent, { color: theme.text }]}>
+              {renderCommentText()}
+            </Text>
+          </View>
+          <View style={styles.commentMetaRow}>
+            <Text style={[styles.commentTime, { color: theme.subText }]}>
+              {comment.created_at_human_short || comment.created_at_human || ""}
+            </Text>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() =>
+                onReact?.(comment, comment?.my_reaction || "like")
+              }
+              onLongPress={() => onTogglePicker?.(commentId)}
+              delayLongPress={250}
+            >
+              <Text
+                style={[
+                  styles.commentAction,
+                  { color: activeReaction ? reactionColor : theme.subText },
+                ]}
+              >
+                {reactionLabel}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => onReply?.(comment)}
+            >
+              <Text style={[styles.commentAction, { color: theme.subText }]}>
+                Reply
+              </Text>
+            </TouchableOpacity>
+            {totalReactionsCount > 0 ? (
+              <View
+                style={[
+                  styles.commentReactionChip,
+                  {
+                    backgroundColor: theme.isDark ? "#0F172A" : "#E2E8F0",
+                    borderColor: theme.isDark ? "#1F2937" : "#CBD5F5",
+                  },
+                ]}
+              >
+                <ActiveReactionIcon width={12} height={12} />
+                <Text style={[styles.commentReactionText, { color: theme.text }]}>
+                  {totalReactionsCount}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+          {level === 0 && showViewReplies ? (
+            <TouchableOpacity
+              style={styles.viewRepliesBtn}
+              onPress={() => onLoadReplies?.(commentId)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.viewRepliesText, { color: theme.primary }]}>
+                View replies
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+          {level === 0 && loadingReplies ? (
+            <View style={styles.repliesLoading}>
+              <ActivityIndicator size="small" color={theme.primary} />
+            </View>
+          ) : null}
+          {activePickerId === commentId ? (
+            <View style={styles.commentReactionPicker}>
+              {REACTION_TYPES.map((r) => (
+                <TouchableOpacity
+                  key={`c-react-${commentId}-${r.title}`}
+                  onPress={() => onReact?.(comment, r.title)}
+                  style={styles.commentReactionOption}
+                >
+                  <r.Icon width={22} height={22} />
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
+        </View>
+      </View>
+      {childReplies.length > 0
+        ? childReplies.map((reply: any) => (
+            <CommentItem
+              key={reply.id}
+              comment={reply}
+              theme={theme}
+              level={level + 1}
+              onReply={onReply}
+              onReact={onReact}
+              onTogglePicker={onTogglePicker}
+              activePickerId={activePickerId}
+              replyMap={replyMap}
+              replyLoadingMap={replyLoadingMap}
+              replyNextMap={replyNextMap}
+              replyPageMap={replyPageMap}
+              onLoadReplies={onLoadReplies}
+              onLoadMoreReplies={onLoadMoreReplies}
+            />
+          ))
+        : null}
+      {level === 0 && childReplies.length > 0 && hasMoreReplies ? (
+        <TouchableOpacity
+          style={styles.viewRepliesBtn}
+          onPress={() => onLoadMoreReplies?.(commentId, currentPage + 1)}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.viewRepliesText, { color: theme.primary }]}>
+            Load more replies
+          </Text>
+        </TouchableOpacity>
+      ) : null}
+    </View>
+  );
+};
+
 const PostItem = ({ item, theme, onSave }: any) => {
   const router = useRouter();
   const [activeIndex, setActiveIndex] = useState(0);
-  const [isSaved, setIsSaved] = useState(item.is_saved === 1);
+  const resolveIsSaved = useCallback((value: any) => {
+    if (typeof value === "boolean") return value;
+    if (typeof value === "number") return value === 1;
+    if (typeof value === "string") return value === "1" || value === "true";
+    return false;
+  }, []);
+  const [isSaved, setIsSaved] = useState(resolveIsSaved(item.is_saved));
+  const [shareVisible, setShareVisible] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const [myReaction, setMyReaction] = useState(item.my_reaction);
+  const [commentsVisible, setCommentsVisible] = useState(false);
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [comments, setComments] = useState<any[]>([]);
+  const [commentText, setCommentText] = useState("");
+  const [commentSubmitting, setCommentSubmitting] = useState(false);
+  const [replyTo, setReplyTo] = useState<any | null>(null);
+  const [replyMap, setReplyMap] = useState<Record<string, any[]>>({});
+  const [replyLoadingMap, setReplyLoadingMap] = useState<
+    Record<string, boolean>
+  >({});
+  const [replyNextMap, setReplyNextMap] = useState<Record<string, string | null>>(
+    {},
+  );
+  const [replyPageMap, setReplyPageMap] = useState<Record<string, number>>({});
+  const [activeCommentPickerId, setActiveCommentPickerId] = useState<string | null>(
+    null,
+  );
 
   // Parse reaction count safely
   const initialTotal =
@@ -65,10 +365,19 @@ const PostItem = ({ item, theme, onSave }: any) => {
       ? item.total_reactions?.total || 0
       : item.total_reactions || 0;
   const [totalLikes, setTotalLikes] = useState<number>(initialTotal);
+  const initialCommentsCount =
+    typeof item.total_comments === "object"
+      ? item.total_comments?.total || 0
+      : item.total_comments || 0;
+  const [commentCount, setCommentCount] = useState<number>(
+    initialCommentsCount,
+  );
 
   const tradingData = item.trading_feeds?.[0] || {};
   const author = item.author || {};
   const mediaUrls = tradingData.images || item.media || [];
+  const postId = item.main_post_id ?? item.id;
+  const pageLink = `${CONFIG.APP_URL}/feed/post/${postId}`;
 
   const handleProfilePress = () => {
     const username = author?.username || author?.user_name || author?.id;
@@ -83,7 +392,7 @@ const PostItem = ({ item, theme, onSave }: any) => {
       if (!userString) return;
       const user = JSON.parse(userString);
       await fetch(
-        `${CONFIG.API_ENDPOINT}/api/feed/post/stat/record-interaction`,
+        `${CONFIG.API_ENDPOINT}/api/stats/post/post-interact`,
         {
           method: "POST",
           headers: {
@@ -99,6 +408,40 @@ const PostItem = ({ item, theme, onSave }: any) => {
   useEffect(() => {
     postInteractStatTrigger();
   }, [postInteractStatTrigger]);
+
+  useEffect(() => {
+    setIsSaved(resolveIsSaved(item.is_saved));
+  }, [item.is_saved, resolveIsSaved]);
+
+  useEffect(() => {
+    if (!shareVisible) {
+      setLinkCopied(false);
+    }
+  }, [shareVisible]);
+
+  const handleCopyLink = useCallback(async () => {
+    try {
+      Clipboard.setString(pageLink);
+      setLinkCopied(true);
+    } catch (error) {}
+  }, [pageLink]);
+
+  const handleShareTo = useCallback(
+    async (platform: "facebook" | "whatsapp" | "twitter") => {
+      const encodedLink = encodeURIComponent(pageLink);
+      const urlMap: Record<string, string> = {
+        facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodedLink}`,
+        whatsapp: `https://wa.me/?text=${encodedLink}`,
+        twitter: `https://twitter.com/intent/tweet?url=${encodedLink}`,
+      };
+      const targetUrl = urlMap[platform];
+      if (!targetUrl) return;
+      try {
+        await Linking.openURL(targetUrl);
+      } catch (error) {}
+    },
+    [pageLink],
+  );
 
   const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     setActiveIndex(Math.round(e.nativeEvent.contentOffset.x / IMAGE_WIDTH));
@@ -135,6 +478,223 @@ const PostItem = ({ item, theme, onSave }: any) => {
   };
 
   const activeReactionData = REACTION_TYPES.find((r) => r.title === myReaction);
+
+  const fetchComments = useCallback(async () => {
+    try {
+      setCommentsLoading(true);
+      const userString = await AsyncStorage.getItem("user");
+      if (!userString) return;
+      const user = JSON.parse(userString);
+      const res = await fetch(
+        `${CONFIG.API_ENDPOINT}/api/feed/post/comments-get?page=1`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${user.token}`,
+          },
+          body: JSON.stringify({ id: item.id }),
+        },
+      );
+      const result = await res.json();
+      if (result.status) {
+        setComments(result.data?.data || []);
+        setCommentCount((prev) => result.data?.total ?? prev);
+      }
+    } catch (error) {
+    } finally {
+      setCommentsLoading(false);
+    }
+  }, [item.id]);
+
+  const fetchReplies = useCallback(
+    async (parentId: string, page = 1) => {
+      try {
+        setReplyLoadingMap((prev) => ({ ...prev, [parentId]: true }));
+        const userString = await AsyncStorage.getItem("user");
+        if (!userString) return;
+        const user = JSON.parse(userString);
+        const res = await fetch(
+          `${CONFIG.API_ENDPOINT}/api/feed/post/comments-get?page=${page}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${user.token}`,
+            },
+            body: JSON.stringify({ post_id: parentId }),
+          },
+        );
+        const result = await res.json();
+        if (result.status) {
+          const newReplies = result.data?.data || [];
+          setReplyMap((prev) => ({
+            ...prev,
+            [parentId]:
+              page === 1 ? newReplies : [...(prev[parentId] || []), ...newReplies],
+          }));
+          setReplyNextMap((prev) => ({
+            ...prev,
+            [parentId]: result.data?.next_page_url || null,
+          }));
+          setReplyPageMap((prev) => ({ ...prev, [parentId]: page }));
+        }
+      } catch (error) {
+      } finally {
+        setReplyLoadingMap((prev) => ({ ...prev, [parentId]: false }));
+      }
+    },
+    [],
+  );
+
+  const updateCommentReaction = useCallback(
+    (list: any[], commentId: string, nextReaction: string) => {
+      return list.map((c) => {
+        if (String(c.id) === String(commentId)) {
+          const prevReaction = c.my_reaction || "none";
+          let totalReactions = c.total_reactions;
+          if (!totalReactions || typeof totalReactions !== "object") {
+            totalReactions = {
+              total: 0,
+              like: 0,
+              love: 0,
+              haha: 0,
+              wow: 0,
+              sad: 0,
+              angry: 0,
+            };
+          }
+          const counts = { ...totalReactions };
+          let total = counts.total || 0;
+
+          const dec = (type: string) => {
+            if (type && type !== "none") {
+              counts[type] = Math.max(0, (counts[type] || 0) - 1);
+              total = Math.max(0, total - 1);
+            }
+          };
+          const inc = (type: string) => {
+            if (type && type !== "none") {
+              counts[type] = (counts[type] || 0) + 1;
+              total += 1;
+            }
+          };
+
+          if (prevReaction !== "none") dec(prevReaction);
+          if (nextReaction !== "none") inc(nextReaction);
+
+          counts.total = total;
+
+          return {
+            ...c,
+            my_reaction: nextReaction !== "none" ? nextReaction : null,
+            total_reactions: counts,
+          };
+        }
+        if (c.comments && Array.isArray(c.comments)) {
+          return {
+            ...c,
+            comments: updateCommentReaction(c.comments, commentId, nextReaction),
+          };
+        }
+        return c;
+      });
+    },
+    [],
+  );
+
+  const handleCommentReact = useCallback(
+    async (comment: any, reaction: string) => {
+      try {
+        const userString = await AsyncStorage.getItem("user");
+        if (!userString) return;
+        const user = JSON.parse(userString);
+        const isRemoving = comment?.my_reaction === reaction;
+        const nextReaction = isRemoving ? "none" : reaction;
+        const data = new FormData();
+        data.append("reaction", nextReaction);
+        await fetch(
+          `${CONFIG.API_ENDPOINT}/api/feed/post/react/${comment.id}`,
+          {
+          method: "POST",
+          body: data,
+          headers: { Authorization: `Bearer ${user.token}` },
+          },
+        );
+
+        setComments((prev) =>
+          updateCommentReaction(prev, String(comment.id), nextReaction),
+        );
+        setReplyMap((prev) => {
+          const next = { ...prev };
+          Object.keys(next).forEach((key) => {
+            next[key] = updateCommentReaction(
+              next[key] || [],
+              String(comment.id),
+              nextReaction,
+            );
+          });
+          return next;
+        });
+      } catch (error) {
+      } finally {
+        setActiveCommentPickerId(null);
+      }
+    },
+    [item.id, updateCommentReaction],
+  );
+
+  const handleSendComment = async () => {
+    const trimmed = commentText.trim();
+    if (!trimmed || commentSubmitting) return;
+    try {
+      setCommentSubmitting(true);
+      const userString = await AsyncStorage.getItem("user");
+      if (!userString) return;
+      const user = JSON.parse(userString);
+      const replyUsername =
+        replyTo?.author?.username || replyTo?.author?.user_name;
+      const mentionIdMap = new Map<string, number | string>();
+      if (replyUsername && replyTo?.author?.id) {
+        mentionIdMap.set(replyUsername, replyTo.author.id);
+      }
+      const payload = {
+        content: buildCommentHtml(trimmed, mentionIdMap, replyUsername),
+        hashtags: [],
+        mentioned_users: [],
+        type: "normal",
+      };
+      const targetId = replyTo?.id || item.id;
+      const res = await fetch(
+        `${CONFIG.API_ENDPOINT}/api/feed/post/comment/${targetId}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${user.token}`,
+          },
+          body: JSON.stringify(payload),
+        },
+      );
+      const result = await res.json();
+      if (result.status) {
+        setCommentText("");
+        setReplyTo(null);
+        setCommentCount((prev) => prev + 1);
+        fetchComments();
+        if (replyTo?.id) {
+          fetchReplies(String(replyTo.id), 1);
+        }
+      }
+    } catch (error) {
+    } finally {
+      setCommentSubmitting(false);
+    }
+  };
+
+  useEffect(() => {
+    if (commentsVisible) fetchComments();
+  }, [commentsVisible, fetchComments]);
 
   // Helper: Specs Rendering (Fixes String Error)
   const renderSpecs = () => {
@@ -318,19 +878,26 @@ const PostItem = ({ item, theme, onSave }: any) => {
               {totalLikes}
             </Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn}>
+          <TouchableOpacity
+            style={styles.actionBtn}
+            onPress={() => setCommentsVisible(true)}
+          >
             <Ionicons name="chatbubble-outline" size={20} color={theme.text} />
             <Text style={[styles.countText, { color: theme.text }]}>
-              {typeof item.total_comments === "object"
-                ? item.total_comments?.total || 0
-                : item.total_comments || 0}
+              {commentCount}
             </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.actionBtn}
+            onPress={() => setShareVisible(true)}
+          >
+            <Ionicons name="share-social-outline" size={20} color={theme.text} />
           </TouchableOpacity>
         </View>
         <TouchableOpacity
           onPress={() => {
             setIsSaved(!isSaved);
-            onSave(item.id);
+            onSave(item.main_post_id ?? item.id);
           }}
         >
           <Ionicons
@@ -346,6 +913,199 @@ const PostItem = ({ item, theme, onSave }: any) => {
           <View style={styles.pickerOverlay} />
         </TouchableWithoutFeedback>
       )}
+
+      <Modal
+        visible={commentsVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          setCommentsVisible(false);
+          setReplyTo(null);
+          setActiveCommentPickerId(null);
+        }}
+      >
+        <View style={styles.commentModalOverlay}>
+          <View style={[styles.commentModal, { backgroundColor: theme.cardBg }]}>
+            <View style={styles.commentHeader}>
+              <Text style={[styles.commentTitle, { color: theme.text }]}>
+                Comments
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setCommentsVisible(false);
+                  setReplyTo(null);
+                  setActiveCommentPickerId(null);
+                }}
+              >
+                <Feather name="x" size={22} color={theme.text} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              style={styles.commentList}
+              contentContainerStyle={{ paddingBottom: 10 }}
+              showsVerticalScrollIndicator={false}
+            >
+              {commentsLoading ? (
+                <View style={styles.commentLoading}>
+                  <ActivityIndicator color={theme.primary} />
+                </View>
+              ) : comments.length === 0 ? (
+                <Text
+                  style={[
+                    styles.commentEmptyText,
+                    { color: theme.subText },
+                  ]}
+                >
+                  No comments yet.
+                </Text>
+              ) : (
+                comments.map((comment) => (
+                  <CommentItem
+                    key={comment.id}
+                    comment={comment}
+                    theme={theme}
+                    replyMap={replyMap}
+                    replyLoadingMap={replyLoadingMap}
+                    replyNextMap={replyNextMap}
+                    replyPageMap={replyPageMap}
+                    onLoadReplies={(id) => fetchReplies(id, 1)}
+                    onLoadMoreReplies={(id, nextPage) =>
+                      fetchReplies(id, nextPage)
+                    }
+                    onReply={(c) => setReplyTo(c)}
+                    onReact={handleCommentReact}
+                    onTogglePicker={(id) =>
+                      setActiveCommentPickerId((prev) =>
+                        prev === id ? null : id,
+                      )
+                    }
+                    activePickerId={activeCommentPickerId}
+                  />
+                ))
+              )}
+            </ScrollView>
+
+            <KeyboardAvoidingView
+              behavior={Platform.OS === "ios" ? "padding" : undefined}
+            >
+              {replyTo ? (
+                <View style={styles.replyBar}>
+                  <Text style={[styles.replyText, { color: theme.subText }]}>
+                    Replying to{" "}
+                    <Text style={styles.replyUser}>
+                      @{replyTo?.author?.username || replyTo?.author?.user_name}
+                    </Text>
+                  </Text>
+                  <TouchableOpacity onPress={() => setReplyTo(null)}>
+                    <Feather name="x" size={16} color={theme.subText} />
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+              <View style={styles.commentInputRow}>
+                <TextInput
+                  value={commentText}
+                  onChangeText={setCommentText}
+                  placeholder="Write a comment..."
+                  placeholderTextColor={theme.subText}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  style={[
+                    styles.commentInput,
+                    { color: theme.text, borderColor: theme.border },
+                  ]}
+                  multiline
+                />
+                <TouchableOpacity
+                  style={styles.sendBtn}
+                  onPress={handleSendComment}
+                  disabled={commentSubmitting}
+                >
+                  <Feather
+                    name="send"
+                    size={18}
+                    color={commentSubmitting ? "#94A3B8" : theme.primary}
+                  />
+                </TouchableOpacity>
+              </View>
+            </KeyboardAvoidingView>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={shareVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShareVisible(false)}
+      >
+        <View style={styles.shareModalOverlay}>
+          <View style={[styles.shareModalCard, { backgroundColor: theme.cardBg }]}>
+            <View style={styles.shareHeader}>
+              <Text style={[styles.shareTitle, { color: theme.text }]}>Share</Text>
+              <TouchableOpacity onPress={() => setShareVisible(false)}>
+                <Feather name="x" size={20} color={theme.text} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.shareIconRow}>
+              <TouchableOpacity
+                style={[styles.shareIconBtn, { backgroundColor: "#1877F2" }]}
+                onPress={() => handleShareTo("facebook")}
+              >
+                <FontAwesome name="facebook" size={20} color="white" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.shareIconBtn, { backgroundColor: "#25D366" }]}
+                onPress={() => handleShareTo("whatsapp")}
+              >
+                <FontAwesome name="whatsapp" size={20} color="white" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.shareIconBtn, { backgroundColor: "#0F172A" }]}
+                onPress={() => handleShareTo("twitter")}
+              >
+                <FontAwesome name="twitter" size={20} color="white" />
+              </TouchableOpacity>
+            </View>
+            <Text style={[styles.shareLabel, { color: theme.subText }]}>
+              Page Link
+            </Text>
+            <View style={styles.shareLinkRow}>
+              <View
+                style={[
+                  styles.shareLinkBox,
+                  {
+                    borderColor: theme.border,
+                    backgroundColor: theme.isDark ? "#0F172A" : "#F8FAFC",
+                  },
+                ]}
+              >
+                <TextInput
+                  value={pageLink}
+                  editable={false}
+                  selectTextOnFocus
+                  style={[styles.shareLinkInput, { color: theme.text }]}
+                />
+              </View>
+              <TouchableOpacity
+                style={[styles.copyBtn, { borderColor: theme.border }]}
+                onPress={handleCopyLink}
+              >
+                <Ionicons
+                  name={linkCopied ? "checkmark" : "copy-outline"}
+                  size={18}
+                  color={linkCopied ? "#10B981" : theme.text}
+                />
+              </TouchableOpacity>
+            </View>
+            {linkCopied ? (
+              <Text style={[styles.copiedText, { color: "#10B981" }]}>
+                Copied
+              </Text>
+            ) : null}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -367,7 +1127,22 @@ export default function NewsFeedScreen() {
     text: isDark ? "#F8FAFC" : "#1E293B",
     subText: isDark ? "#94A3B8" : "#64748B",
     primary: "#3B66F5",
+    border: isDark ? "#1F2937" : "#E2E8F0",
+    isDark,
   };
+
+  const handleBookmark = useCallback(async (postId: number | string) => {
+    if (!postId) return;
+    try {
+      const userString = await AsyncStorage.getItem("user");
+      if (!userString) return;
+      const user = JSON.parse(userString);
+      await fetch(`${CONFIG.API_ENDPOINT}/api/feed/${postId}/bookmark`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${user.token}` },
+      });
+    } catch (error) {}
+  }, []);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]}>
@@ -416,7 +1191,9 @@ export default function NewsFeedScreen() {
             </LinearGradient>
           </TouchableOpacity>
         }
-        renderItem={({ item }) => <PostItem item={item} theme={theme} />}
+        renderItem={({ item }) => (
+          <PostItem item={item} theme={theme} onSave={handleBookmark} />
+        )}
         ListFooterComponent={<View style={{ height: 100 }} />}
       />
       {sidebarVisible && (
@@ -560,6 +1337,149 @@ const styles = StyleSheet.create({
   },
   pickerOption: { paddingHorizontal: 8 },
   pickerOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 998 },
+  commentModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "flex-end",
+  },
+  commentModal: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 16,
+    maxHeight: "80%",
+  },
+  shareModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  shareModalCard: {
+    width: "100%",
+    maxWidth: 360,
+    borderRadius: 18,
+    padding: 16,
+  },
+  shareHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  shareTitle: { fontSize: 16, fontWeight: "700" },
+  shareIconRow: { flexDirection: "row", gap: 12, marginBottom: 16 },
+  shareIconBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  shareLabel: { fontSize: 12, fontWeight: "600", marginBottom: 6 },
+  shareLinkRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  shareLinkBox: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  shareLinkInput: { fontSize: 13 },
+  copyBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    borderWidth: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  copiedText: { marginTop: 8, fontSize: 12, fontWeight: "600" },
+  commentHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  commentTitle: { fontSize: 16, fontWeight: "700" },
+  commentList: { maxHeight: 360, flexGrow: 0 },
+  commentLoading: { paddingVertical: 20, alignItems: "center" },
+  commentEmptyText: { textAlign: "center", paddingVertical: 20 },
+  commentItem: {
+    flexDirection: "row",
+    marginBottom: 12,
+    alignItems: "flex-start",
+  },
+  commentAvatar: { width: 32, height: 32, borderRadius: 16, marginRight: 10 },
+  commentBody: { flex: 1 },
+  commentBubble: {
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  commentName: { fontWeight: "700", fontSize: 13, marginBottom: 2 },
+  commentTime: { fontSize: 11 },
+  commentContent: { fontSize: 13, lineHeight: 18 },
+  commentMention: { color: "#3B66F5", fontWeight: "600" },
+  commentMetaRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 4,
+    marginLeft: 6,
+    alignItems: "center",
+  },
+  commentAction: { fontSize: 12, fontWeight: "600" },
+  commentReactionChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  commentReactionText: { fontSize: 11, fontWeight: "700" },
+  commentReactionPicker: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 8,
+    marginLeft: 6,
+  },
+  commentReactionOption: { padding: 2 },
+  viewRepliesBtn: {
+    marginTop: 6,
+    marginLeft: 6,
+  },
+  viewRepliesText: { fontSize: 12, fontWeight: "600" },
+  repliesLoading: { marginTop: 6, marginLeft: 6 },
+  replyBar: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(0,0,0,0.05)",
+  },
+  replyText: { fontSize: 12 },
+  replyUser: { color: "#3B66F5", fontWeight: "700" },
+  commentInputRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 8,
+    paddingTop: 6,
+    paddingBottom: 4,
+  },
+  commentInput: {
+    flex: 1,
+    minHeight: 36,
+    maxHeight: 120,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  sendBtn: { padding: 8 },
   iconBtn: {
     width: 44,
     height: 44,

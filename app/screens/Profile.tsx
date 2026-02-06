@@ -33,19 +33,15 @@ const PostItem = ({ item, theme }: any) => {
       if (!userString) return;
       const user = JSON.parse(userString);
 
-      await fetch(
-        `${CONFIG.API_ENDPOINT}/api/feed/post/stat/record-interaction`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${user.token}`,
-          },
-          body: JSON.stringify({ post_id: item.id }),
+      await fetch(`${CONFIG.API_ENDPOINT}/api/stats/post/post-interact`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${user.token}`,
         },
-      );
-    } catch (error) {
-    }
+        body: JSON.stringify({ post_id: item.id }),
+      });
+    } catch (error) {}
   }, [item.id]);
 
   const handleLike = () => {

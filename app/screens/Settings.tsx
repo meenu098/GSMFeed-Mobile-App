@@ -1,6 +1,7 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Feather, SimpleLineIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ScrollView,
   StatusBar,
@@ -76,12 +77,28 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [sidebarVisible, setSidebarVisible] = useState(false);
+  const [username, setUsername] = useState<string>("User");
 
   const theme = {
     bg: isDark ? "#0F172A" : "#FFFFFF",
     text: isDark ? "#FFF" : "#000",
     border: isDark ? "#1E293B" : "#E2E8F0",
   };
+
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        const userString = await AsyncStorage.getItem("user");
+        if (!userString) return;
+        const user = JSON.parse(userString);
+        const nextUsername = user?.username || user?.name;
+        if (nextUsername) setUsername(nextUsername);
+      } catch (error) {
+      }
+    };
+
+    loadUser();
+  }, []);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
@@ -102,7 +119,7 @@ export default function SettingsScreen() {
             onPress={() => router.push("/screens/Profile")}
           >
             <Text style={[styles.headerTitle, { color: theme.text }]}>
-              Jose Arnedo
+              {username}
             </Text>
             <Feather name="chevron-down" size={20} color={theme.text} />
           </TouchableOpacity>
