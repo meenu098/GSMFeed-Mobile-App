@@ -73,8 +73,9 @@ export default function ContactsScreen() {
 
 
         if (json.status && json.data) {
-          // JSON structure: json.data.users.data
-          const usersArray = json.data.users?.data || [];
+          const usersArray = Array.isArray(json.data)
+            ? json.data
+            : json.data.users?.data || json.data.data || [];
           setContacts((prev) =>
             isRefresh ? usersArray : [...prev, ...usersArray],
           );
@@ -137,9 +138,16 @@ export default function ContactsScreen() {
         return;
       }
 
-      let actionEndpoint = "follow";
-      if (activeTab === "Following") actionEndpoint = "unfollow";
-      else if (activeTab === "Requests") actionEndpoint = "accept-request";
+      const isFollowed =
+        activeTab === "Following" ||
+        item.followedByMe === true ||
+        item.followedByMe === 1 ||
+        item.followedByMe === "1" ||
+        item.followedByMe === "true" ||
+        (item.followedByMe && typeof item.followedByMe === "object");
+
+      let actionEndpoint = isFollowed ? "unfollow" : "follow";
+      if (activeTab === "Requests") actionEndpoint = "accept-request";
 
       const response = await fetch(
         `${CONFIG.API_ENDPOINT}/api/connection/${actionEndpoint}`,
@@ -240,7 +248,13 @@ export default function ContactsScreen() {
             />
           }
           renderItem={({ item }) => {
-            // Move logic/logging here, before the JSX return
+            const isFollowed =
+              activeTab === "Following" ||
+              item.followedByMe === true ||
+              item.followedByMe === 1 ||
+              item.followedByMe === "1" ||
+              item.followedByMe === "true" ||
+              (item.followedByMe && typeof item.followedByMe === "object");
 
             return (
               <View
@@ -274,7 +288,7 @@ export default function ContactsScreen() {
                 <TouchableOpacity
                   style={[
                     styles.actionBtn,
-                    activeTab === "Following"
+                    isFollowed && activeTab !== "Requests"
                       ? styles.unfollowBtn
                       : { backgroundColor: theme.primary },
                   ]}
@@ -283,15 +297,15 @@ export default function ContactsScreen() {
                   <Text
                     style={[
                       styles.btnText,
-                      activeTab === "Following"
+                      isFollowed && activeTab !== "Requests"
                         ? { color: theme.text }
                         : { color: "#FFF" },
                     ]}
                   >
-                    {activeTab === "Following"
-                      ? "Following"
-                      : activeTab === "Requests"
-                        ? "Accept"
+                    {activeTab === "Requests"
+                      ? "Accept"
+                      : isFollowed
+                        ? "Following"
                         : "Follow"}
                   </Text>
                 </TouchableOpacity>
