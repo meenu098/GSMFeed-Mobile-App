@@ -1,8 +1,13 @@
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+<<<<<<< HEAD
 import { RegistrationProvider } from "../shared/RegistrationContext";
 import { ThemeProvider, useTheme } from "../shared/themeContext";
+=======
+import { RegistrationProvider } from "./utils/RegistrationContext";
+import { ThemeProvider, useTheme } from "./utils/themeContext";
+>>>>>>> main
 
 function RootLayoutNav() {
   const { isDark } = useTheme();

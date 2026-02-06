@@ -18,9 +18,15 @@ import Animated, {
   LinearTransition,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+<<<<<<< HEAD:app/screens/auth/Registration/stage-5.tsx
 import FooterLinks from "../../../../components/FooterLinks";
 import { useTheme } from "../../../../shared/themeContext";
 import { useRegistration } from "../../../../shared/RegistrationContext";
+=======
+import FooterLinks from "../../navigation/FooterLinks";
+import { useRegistration } from "../../utils/RegistrationContext";
+import { useTheme } from "../../utils/themeContext";
+>>>>>>> main:app/screens/Registration/stage-5.tsx
 
 export default function RegistrationScreen5() {
   const router = useRouter();
@@ -62,7 +68,11 @@ export default function RegistrationScreen5() {
 
   const handleNext = () => {
     updateFormData({ password: password });
+<<<<<<< HEAD:app/screens/auth/Registration/stage-5.tsx
     router.push("/screens/auth/Registration/stage-6");
+=======
+    router.push("/screens/Registration/stage-6");
+>>>>>>> main:app/screens/Registration/stage-5.tsx
   };
 
   const theme = {

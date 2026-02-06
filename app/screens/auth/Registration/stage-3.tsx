@@ -20,10 +20,17 @@ import {
 } from "react-native";
 import { Dropdown } from "react-native-element-dropdown";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+<<<<<<< HEAD:app/screens/auth/Registration/stage-3.tsx
 import FooterLinks from "../../../../components/FooterLinks";
 import CONFIG from "../../../../shared/config";
 import { useTheme } from "../../../../shared/themeContext";
 import { useRegistration } from "../../../../shared/RegistrationContext";
+=======
+import FooterLinks from "../../navigation/FooterLinks";
+import CONFIG from "../../utils/config";
+import { useRegistration } from "../../utils/RegistrationContext"; // Import Context
+import { useTheme } from "../../utils/themeContext";
+>>>>>>> main:app/screens/Registration/stage-3.tsx
 
 const { height } = Dimensions.get("window");
 
@@ -124,7 +131,11 @@ export default function RegistrationScreen3() {
       // Convert the string dial code to a number for your backend payload
       phone_country_code: parseInt(String(dialCodeRaw), 10),
     });
+<<<<<<< HEAD:app/screens/auth/Registration/stage-3.tsx
     router.push("/screens/auth/Registration/stage-4");
+=======
+    router.push("/screens/Registration/stage-4");
+>>>>>>> main:app/screens/Registration/stage-3.tsx
   };
   const theme = {
     colors: {
