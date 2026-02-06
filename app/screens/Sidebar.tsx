@@ -19,6 +19,7 @@ import {
   Settings,
 } from "../../components/icons/sidebarIcon";
 import CONFIG from "../../shared/config";
+import { clearUser } from "../../shared/storage";
 import { useTheme } from "../../shared/themeContext";
 
 export default function Sidebar() {
@@ -89,6 +90,14 @@ export default function Sidebar() {
 
     loadSidebarStats();
   }, []);
+
+  const handleLogout = async () => {
+    try {
+      await clearUser();
+    } finally {
+      router.replace("/screens/auth/Login");
+    }
+  };
 
   const menuItems = [
     { icon: NewsFeedMenuIcons, label: "Newsfeed", screen: "/screens/Newsfeed" },
@@ -224,7 +233,7 @@ export default function Sidebar() {
             />
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={() => router.replace("/screens/auth/Login")}>
+          <TouchableOpacity onPress={handleLogout}>
             <Feather name="log-out" size={22} color={themeColors.text} />
           </TouchableOpacity>
         </View>

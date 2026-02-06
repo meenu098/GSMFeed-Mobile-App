@@ -23,6 +23,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import FooterLinks from "../../../../components/FooterLinks";
 import CONFIG from "../../../../shared/config";
 import { useTheme } from "../../../../shared/themeContext";
+import { useRegistration } from "../../../../shared/RegistrationContext";
 
 const { height } = Dimensions.get("window");
 
@@ -31,23 +32,33 @@ export default function RegistrationScreen3() {
   const insets = useSafeAreaInsets();
   const { isDark } = useTheme();
 
-  // --- State Management ---
-  const [establishedOn, setEstablishedOn] = useState(null);
-  const [industry, setIndustry] = useState(null);
+  // --- 1. Access Registration Context ---
+  const { formData, updateFormData } = useRegistration();
+
+  // --- 2. State Management initialized from Context ---
+  const [establishedOn, setEstablishedOn] = useState(
+    formData.est_year ? formData.est_year.toString() : null,
+  );
+  const [industry, setIndustry] = useState(
+    formData.company_category_id
+      ? formData.company_category_id.toString()
+      : null,
+  );
   const [industries, setIndustries] = useState([]);
   const [loadingIndustries, setLoadingIndustries] = useState(false);
 
   // Country Selection State
   const deviceRegion = (Localization.getLocales()[0]?.regionCode ||
     "AE") as TCountryCode;
-  const [selectedCountry, setSelectedCountry] =
-    useState<TCountryCode>(deviceRegion);
+  const [selectedCountry, setSelectedCountry] = useState<TCountryCode>(
+    (formData.country as TCountryCode) || deviceRegion,
+  );
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
   const countryData = countries[selectedCountry] || countries["AE"];
 
-  // --- 1. Dynamic Year Generation (Current Year - 40 Years) ---
+  // --- 3. Dynamic Year Generation ---
   const establishedOptions = useMemo(() => {
     const currentYear = new Date().getFullYear();
     const years = [];
@@ -58,7 +69,7 @@ export default function RegistrationScreen3() {
     return years;
   }, []);
 
-  // --- 2. API Call: Fetch Industries ---
+  // --- 4. API Call: Fetch Industries ---
   useEffect(() => {
     const fetchIndustries = async () => {
       setLoadingIndustries(true);
@@ -83,13 +94,14 @@ export default function RegistrationScreen3() {
     fetchIndustries();
   }, []);
 
-  // --- 3. Filtered Country List ---
+  // --- 5. Filtered Country List ---
   const countryList = useMemo(() => {
     return Object.entries(countries)
       .map(([code, data]) => ({
         code: code as TCountryCode,
         name: data.name,
         emoji: getEmojiFlag(code as TCountryCode),
+        phone: data.phone[0], // Include phone code for dynamic update
       }))
       .filter(
         (c) =>
@@ -98,6 +110,22 @@ export default function RegistrationScreen3() {
       );
   }, [searchQuery]);
 
+  const canGoNext = establishedOn && industry && selectedCountry;
+
+  // --- 6. Navigation Handler ---
+  const handleNext = () => {
+    // Safety check: Get the dial code and ensure it is treated as a string for parseInt
+    const dialCodeRaw = countryData?.phone?.[0] || "0";
+
+    updateFormData({
+      company_category_id: industry ? parseInt(industry) : null,
+      est_year: establishedOn ? parseInt(establishedOn) : null,
+      country: selectedCountry,
+      // Convert the string dial code to a number for your backend payload
+      phone_country_code: parseInt(String(dialCodeRaw), 10),
+    });
+    router.push("/screens/auth/Registration/stage-4");
+  };
   const theme = {
     colors: {
       primary: "#3B66F5",
@@ -112,8 +140,6 @@ export default function RegistrationScreen3() {
         : ["#F8FAFC", "#E2E8F0", "#FFFFFF"],
     },
   };
-
-  const canGoNext = establishedOn && industry && selectedCountry;
 
   return (
     <View
@@ -322,9 +348,7 @@ export default function RegistrationScreen3() {
                   backgroundColor: canGoNext ? theme.colors.primary : "#CBD5E1",
                 },
               ]}
-              onPress={() =>
-                canGoNext && router.push("/screens/auth/Registration/stage-4")
-              }
+              onPress={handleNext}
               disabled={!canGoNext}
             >
               <Text style={styles.nextButtonText}>Next</Text>
@@ -456,8 +480,6 @@ const styles = StyleSheet.create({
   },
   backButtonText: { fontWeight: "700", fontSize: 16 },
   nextButtonText: { color: "#FFF", fontWeight: "700", fontSize: 16 },
-
-  // Modal Styles
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",

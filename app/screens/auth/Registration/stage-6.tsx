@@ -1,10 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
+import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
+  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -16,20 +19,20 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import FooterLinks from "../../../../components/FooterLinks";
 import CONFIG from "../../../../shared/config";
-import { useTheme } from "../../../../shared/themeContext";
+import { useRegistration } from "../../../../shared/RegistrationContext";
 
 export default function RegistrationScreen6() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { isDark } = useTheme();
+  const { formData, updateFormData } = useRegistration();
 
-  const [username, setUsername] = useState("");
-  const [termsAgreed, setTermsAgreed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [termsAgreed, setTermsAgreed] = useState(false);
   const [usernameValidity, setUsernameValidity] = useState({
     valid: null as boolean | null,
     loading: false,
   });
+  const [suggestions, setSuggestions] = useState<string[]>([]);
 
   const cleanedValue = (string: string) => {
     return string.replace(/[^a-zA-Z0-9-_]/g, "").replace(/^[^a-zA-Z0-9]+/, "");
@@ -37,8 +40,9 @@ export default function RegistrationScreen6() {
 
   useEffect(() => {
     const validateUsername = async () => {
-      if (username.length < 3) {
+      if (!formData.username || formData.username.length < 3) {
         setUsernameValidity({ valid: null, loading: false });
+        setSuggestions([]);
         return;
       }
       setUsernameValidity({ valid: null, loading: true });
@@ -48,29 +52,60 @@ export default function RegistrationScreen6() {
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username }),
+            body: JSON.stringify({ username: formData.username }),
           },
         );
-        const data = await res.json();
+        const result = await res.json();
+
         setUsernameValidity({
-          valid: data?.data?.is_available,
+          valid: result?.data?.is_available,
           loading: false,
         });
+
+        // Set suggestions if username is taken
+        if (!result?.data?.is_available && result?.data?.suggestions) {
+          setSuggestions(result.data.suggestions);
+        } else {
+          setSuggestions([]);
+        }
       } catch (err) {
         setUsernameValidity({ valid: false, loading: false });
       }
     };
     const timeout = setTimeout(validateUsername, 500);
     return () => clearTimeout(timeout);
-  }, [username]);
+  }, [formData.username]);
 
-  const canSubmit = usernameValidity.valid && termsAgreed;
-
-  const handleFinalSignUp = async () => {
+  const handleSignUp = async () => {
     setSubmitting(true);
-    // Add your API call to https://api.gsmfeed.com/api/auth/register here
-    setSubmitting(false);
+    const finalPayload = { ...formData, isLead: false, otp_token: "" };
+
+    try {
+      const response = await fetch(`${CONFIG.API_ENDPOINT}/api/auth/register`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(finalPayload),
+      });
+
+      const result = await response.json();
+      if (response.ok) {
+        Alert.alert("Success", "Account created successfully!", [
+          { text: "OK", onPress: () => router.replace("/under-review") },
+        ]);
+      } else {
+        Alert.alert("Signup Failed", result.message || "Something went wrong.");
+      }
+    } catch (error) {
+      Alert.alert("Error", "Could not connect to the server.");
+    } finally {
+      setSubmitting(false);
+    }
   };
+
+  const canSubmit = usernameValidity.valid && termsAgreed && !submitting;
 
   return (
     <View style={styles.container}>
@@ -80,15 +115,16 @@ export default function RegistrationScreen6() {
         backgroundColor="transparent"
       />
       <LinearGradient
-        colors={["#1A0B2E", "#020205"]}
+        colors={["#0A0A1A", "#1A0B2E", "#020205"]}
         style={StyleSheet.absoluteFillObject}
       />
 
       <ScrollView
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingTop: insets.top + 40 },
+          { paddingTop: insets.top + 60 },
         ]}
+        showsVerticalScrollIndicator={false}
       >
         <Image
           source={require("../../../../assets/common/logo-dark.png")}
@@ -96,81 +132,126 @@ export default function RegistrationScreen6() {
           resizeMode="contain"
         />
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Username</Text>
+        <View style={styles.glassWrapper}>
+          <BlurView
+            intensity={Platform.OS === "ios" ? 40 : 100}
+            tint="dark"
+            style={styles.blurContainer}
+          >
+            <View style={styles.innerCard}>
+              <Text style={styles.cardTitle}>Choose Username</Text>
 
-          <View style={styles.inputGroup}>
-            <View style={styles.inputWrapper}>
-              <TextInput
-                placeholder="eg: john_doe"
-                placeholderTextColor="#94A3B8"
-                autoCapitalize="none"
-                style={[
-                  styles.input,
-                  {
-                    borderColor:
-                      usernameValidity.valid === false ? "#EF4444" : "#E2E8F0",
-                  },
-                ]}
-                value={username}
-                onChangeText={(val) => setUsername(cleanedValue(val))}
-              />
-              <View style={styles.statusIconContainer}>
-                {usernameValidity.loading ? (
-                  <ActivityIndicator size="small" color="#3B66F5" />
-                ) : usernameValidity.valid === true ? (
-                  <Ionicons name="checkmark-circle" size={22} color="#10B981" />
-                ) : null}
+              <View style={styles.inputGroup}>
+                <View style={styles.inputWrapper}>
+                  <TextInput
+                    placeholder="eg: john_doe"
+                    placeholderTextColor="rgba(255,255,255,0.4)"
+                    autoCapitalize="none"
+                    editable={!submitting}
+                    style={[
+                      styles.input,
+                      {
+                        borderColor:
+                          usernameValidity.valid === false
+                            ? "#EF4444"
+                            : "rgba(255,255,255,0.15)",
+                      },
+                    ]}
+                    value={formData.username}
+                    onChangeText={(val) =>
+                      updateFormData({ username: cleanedValue(val) })
+                    }
+                  />
+                  <View style={styles.statusIconContainer}>
+                    {usernameValidity.loading ? (
+                      <ActivityIndicator size="small" color="#3B66F5" />
+                    ) : usernameValidity.valid === true ? (
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={22}
+                        color="#10B981"
+                      />
+                    ) : usernameValidity.valid === false ? (
+                      <Ionicons name="close-circle" size={22} color="#EF4444" />
+                    ) : null}
+                  </View>
+                </View>
+
+                {/* SUGGESTIONS SECTION */}
+                {suggestions.length > 0 && (
+                  <View style={styles.suggestionContainer}>
+                    <Text style={styles.suggestionLabel}>Suggestions:</Text>
+                    <View style={styles.suggestionList}>
+                      {suggestions.map((sug, index) => (
+                        <TouchableOpacity
+                          key={index}
+                          style={styles.suggestionChip}
+                          onPress={() => updateFormData({ username: sug })}
+                        >
+                          <Text style={styles.suggestionText}>{sug}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.agreementSection}>
+                <TouchableOpacity
+                  onPress={() => setTermsAgreed(!termsAgreed)}
+                  disabled={submitting}
+                  style={styles.checkboxTouch}
+                >
+                  <Ionicons
+                    name={termsAgreed ? "checkbox" : "square-outline"}
+                    size={24}
+                    color={termsAgreed ? "#3B66F5" : "rgba(255,255,255,0.5)"}
+                  />
+                </TouchableOpacity>
+                <View style={styles.termsTextContainer}>
+                  <Text style={styles.termsText}>
+                    I agree to the <Text style={styles.linkText}>Terms</Text>{" "}
+                    and <Text style={styles.linkText}>Privacy Policy</Text>.
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.navButtons}>
+                <TouchableOpacity
+                  onPress={() => router.back()}
+                  style={styles.backButton}
+                  disabled={submitting}
+                >
+                  <Text style={styles.backText}>Back</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.signUpButton,
+                    {
+                      backgroundColor: canSubmit
+                        ? "#3B66F5"
+                        : "rgba(255,255,255,0.2)",
+                    },
+                  ]}
+                  disabled={!canSubmit}
+                  onPress={handleSignUp}
+                >
+                  {submitting ? (
+                    <ActivityIndicator color="#FFF" />
+                  ) : (
+                    <Text
+                      style={[
+                        styles.signUpText,
+                        { opacity: canSubmit ? 1 : 0.5 },
+                      ]}
+                    >
+                      Sign Up
+                    </Text>
+                  )}
+                </TouchableOpacity>
               </View>
             </View>
-          </View>
-
-          {/* Corrected Agreement Section */}
-          <View style={styles.agreementSection}>
-            <TouchableOpacity
-              style={styles.checkboxTouch}
-              onPress={() => setTermsAgreed(!termsAgreed)}
-            >
-              <Ionicons
-                name={termsAgreed ? "checkbox" : "square-outline"}
-                size={24}
-                color={termsAgreed ? "#3B66F5" : "#64748B"}
-              />
-            </TouchableOpacity>
-
-            <View style={styles.termsTextContainer}>
-              <Text style={styles.termsText}>
-                I have read and agree to the{" "}
-                <Text style={styles.linkText}>Terms and Conditions</Text> and{" "}
-                <Text style={styles.linkText}>Privacy Policy</Text> of gsmfeed,
-                including consent to the use of my information.
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.navButtons}>
-            <TouchableOpacity
-              onPress={() => router.back()}
-              style={styles.backButton}
-            >
-              <Text style={styles.backText}>Back</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.signUpButton,
-                { backgroundColor: canSubmit ? "#3B66F5" : "#CBD5E1" },
-              ]}
-              disabled={!canSubmit || submitting}
-              onPress={handleFinalSignUp}
-            >
-              {submitting ? (
-                <ActivityIndicator color="#FFF" />
-              ) : (
-                <Text style={styles.signUpText}>Sign Up</Text>
-              )}
-            </TouchableOpacity>
-          </View>
+          </BlurView>
         </View>
         <FooterLinks />
       </ScrollView>
@@ -180,85 +261,78 @@ export default function RegistrationScreen6() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scrollContent: { alignItems: "center", paddingHorizontal: 20 },
-  logo: { width: 140, height: 60, marginBottom: 30 },
-  card: {
-    backgroundColor: "#FFF",
+  scrollContent: { alignItems: "center", paddingHorizontal: 25 },
+  logo: { width: 150, height: 60, marginBottom: 40 },
+  glassWrapper: {
     width: "100%",
-    borderRadius: 24,
-    padding: 24,
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5,
+    borderRadius: 28,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.15)",
+    marginBottom: 30,
   },
+  blurContainer: { width: "100%", padding: 24 },
+  innerCard: { backgroundColor: "transparent" },
   cardTitle: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#0F172A",
-    marginBottom: 12,
+    color: "#FFFFFF",
+    marginBottom: 15,
   },
   inputGroup: { marginBottom: 20 },
   inputWrapper: { position: "relative", justifyContent: "center" },
   input: {
     height: 55,
-    borderRadius: 12,
+    borderRadius: 14,
     paddingLeft: 16,
     paddingRight: 45,
     borderWidth: 1,
-    backgroundColor: "#F8FAFC",
-    color: "#0F172A",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    color: "#FFFFFF",
     fontSize: 15,
   },
   statusIconContainer: { position: "absolute", right: 15 },
-
-  // Layout Fixes for Terms
+  suggestionContainer: { marginTop: 12 },
+  suggestionLabel: {
+    color: "rgba(255,255,255,0.5)",
+    fontSize: 12,
+    marginBottom: 6,
+    marginLeft: 4,
+  },
+  suggestionList: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  suggestionChip: {
+    backgroundColor: "rgba(59, 102, 245, 0.2)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(59, 102, 245, 0.4)",
+  },
+  suggestionText: { color: "#3B66F5", fontSize: 13, fontWeight: "600" },
   agreementSection: {
     flexDirection: "row",
-    alignItems: "flex-start", // Aligns checkbox to top of text
-    marginBottom: 30,
+    alignItems: "flex-start",
+    marginBottom: 35,
+    width: "100%",
   },
-  checkboxTouch: {
-    marginTop: -2, // Fine-tune checkbox vertical position
-  },
-  termsTextContainer: {
-    flex: 1, // Allows text to take remaining width and wrap
-    marginLeft: 10,
-  },
-  termsText: {
-    fontSize: 13,
-    color: "#475569",
-    lineHeight: 18,
-  },
-  linkText: {
-    color: "#3B66F5",
-    fontWeight: "600",
-  },
-
+  checkboxTouch: { marginTop: -2 },
+  termsTextContainer: { flex: 1, marginLeft: 12 },
+  termsText: { fontSize: 13, color: "rgba(255,255,255,0.7)", lineHeight: 18 },
+  linkText: { color: "#3B66F5", fontWeight: "600" },
   navButtons: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "flex-end",
   },
-  backButton: {
-    marginRight: 25,
-  },
-  backText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#3B66F5",
-  },
+  backButton: { marginRight: 25 },
+  backText: { fontSize: 16, fontWeight: "600", color: "#FFFFFF" },
   signUpButton: {
-    height: 50,
-    paddingHorizontal: 30,
-    borderRadius: 14,
+    height: 52,
+    paddingHorizontal: 35,
+    borderRadius: 16,
     justifyContent: "center",
     alignItems: "center",
-    minWidth: 120,
+    minWidth: 130,
   },
-  signUpText: {
-    color: "#FFF",
-    fontWeight: "700",
-    fontSize: 16,
-  },
+  signUpText: { color: "#FFFFFF", fontWeight: "700", fontSize: 16 },
 });

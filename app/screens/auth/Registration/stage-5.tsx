@@ -20,14 +20,17 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import FooterLinks from "../../../../components/FooterLinks";
 import { useTheme } from "../../../../shared/themeContext";
+import { useRegistration } from "../../../../shared/RegistrationContext";
 
 export default function RegistrationScreen5() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { isDark } = useTheme();
-
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const { formData, updateFormData } = useRegistration();
+  const [password, setPassword] = useState(formData.password || "");
+  const [confirmPassword, setConfirmPassword] = useState(
+    formData.password || "",
+  );
 
   const validationItems = [
     {
@@ -56,6 +59,11 @@ export default function RegistrationScreen5() {
   const isPasswordValid = validationItems.every((item) => item.isMet);
   const passwordsMatch = password === confirmPassword && password !== "";
   const canGoNext = isPasswordValid && passwordsMatch;
+
+  const handleNext = () => {
+    updateFormData({ password: password });
+    router.push("/screens/auth/Registration/stage-6");
+  };
 
   const theme = {
     colors: {
@@ -151,6 +159,7 @@ export default function RegistrationScreen5() {
                     borderColor: theme.colors.cardBorder,
                   },
                 ]}
+                value={password}
                 onChangeText={setPassword}
               />
               <View style={styles.statusIconContainer}>
@@ -182,6 +191,7 @@ export default function RegistrationScreen5() {
                     borderColor: theme.colors.cardBorder,
                   },
                 ]}
+                value={confirmPassword}
                 onChangeText={setConfirmPassword}
               />
               <View style={styles.statusIconContainer}>
@@ -212,9 +222,8 @@ export default function RegistrationScreen5() {
                   backgroundColor: canGoNext ? theme.colors.primary : "#CBD5E1",
                 },
               ]}
-              onPress={() =>
-                canGoNext && router.push("/screens/auth/Registration/stage-6")
-              }
+              onPress={handleNext}
+              disabled={!canGoNext}
             >
               <Text style={styles.nextText}>Next</Text>
             </TouchableOpacity>
