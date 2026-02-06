@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BusinessMan, CompanySvg } from "../../../components/icons/icons";
 import FooterLinks from "../../navigation/FooterLinks";
+import { useRegistration } from "../../utils/RegistrationContext";
 import { useTheme } from "../../utils/themeContext";
 
 const { width } = Dimensions.get("window");
@@ -21,6 +22,12 @@ export default function RegistrationScreen1() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { isDark } = useTheme();
+
+  const { updateFormData } = useRegistration();
+  const handleSelection = (type: "business" | "individual", route: string) => {
+    updateFormData({ account_type: type });
+    router.push(route as any);
+  };
 
   const theme = {
     colors: {
@@ -78,6 +85,7 @@ export default function RegistrationScreen1() {
         </View>
 
         <View style={styles.cardContainer}>
+          {/* Company Owner Card - Maps to "business" */}
           <TouchableOpacity
             style={[
               styles.card,
@@ -86,10 +94,11 @@ export default function RegistrationScreen1() {
                 borderColor: theme.colors.cardBorder,
               },
             ]}
-            onPress={() => router.push("/screens/Registration/stage-2")}
+            onPress={() =>
+              handleSelection("business", "/screens/Registration/stage-2")
+            }
             activeOpacity={0.7}
           >
-            {/* Circle Wrapper added back for better visual hierarchy */}
             <View
               style={[
                 styles.iconCircle,
@@ -108,6 +117,7 @@ export default function RegistrationScreen1() {
             </View>
           </TouchableOpacity>
 
+          {/* Individual Card - Maps to "individual" */}
           <TouchableOpacity
             style={[
               styles.card,
@@ -116,7 +126,9 @@ export default function RegistrationScreen1() {
                 borderColor: theme.colors.cardBorder,
               },
             ]}
-            onPress={() => router.push("/screens/UserRegistration/stage-1")}
+            onPress={() =>
+              handleSelection("individual", "/screens/UserRegistration/stage-1")
+            }
             activeOpacity={0.7}
           >
             <View

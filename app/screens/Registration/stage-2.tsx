@@ -21,6 +21,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import FooterLinks from "../../navigation/FooterLinks";
 import CONFIG from "../../utils/config";
+import { useRegistration } from "../../utils/RegistrationContext";
 import { useTheme } from "../../utils/themeContext";
 
 const { height } = Dimensions.get("window");
@@ -29,35 +30,33 @@ export default function RegistrationScreen2() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { isDark } = useTheme();
+  const { formData, updateFormData } = useRegistration();
 
-  // 1. Detection and Form States
   const deviceRegion = (Localization.getLocales()[0]?.regionCode ||
     "AE") as TCountryCode;
-  const [selectedCountry, setSelectedCountry] =
-    useState<TCountryCode>(deviceRegion);
+  const [selectedCountry, setSelectedCountry] = useState<TCountryCode>(
+    (formData.country as TCountryCode) || deviceRegion,
+  );
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
-  const [businessName, setBusinessName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
+  const [businessName, setBusinessName] = useState(formData.first_name || "");
+  const [phone, setPhone] = useState(formData.phone || "");
+  const [email, setEmail] = useState(formData.email || "");
 
-  // Validation States
-  const [emailValidity, setEmailValidity] = useState<{
-    valid: boolean | null;
-    loading: boolean;
-    message: string;
-  }>({ valid: null, loading: false, message: "" });
-
-  const [businessNameValidity, setBusinessNameValidity] = useState<{
-    valid: boolean | null;
-    loading: boolean;
-    message: string;
-  }>({ valid: null, loading: false, message: "" });
+  const [emailValidity, setEmailValidity] = useState({
+    valid: null as boolean | null,
+    loading: false,
+    message: "",
+  });
+  const [businessNameValidity, setBusinessNameValidity] = useState({
+    valid: null as boolean | null,
+    loading: false,
+    message: "",
+  });
 
   const countryData = countries[selectedCountry] || countries["AE"];
 
-  // 2. Memoized Country List for Dropdown
   const countryList = useMemo(() => {
     return Object.entries(countries)
       .map(([code, data]) => ({
@@ -73,7 +72,7 @@ export default function RegistrationScreen2() {
       );
   }, [searchQuery]);
 
-  // 3. Email Validation API
+  // Email Validation
   useEffect(() => {
     const checkEmail = async () => {
       if (!email) {
@@ -112,7 +111,7 @@ export default function RegistrationScreen2() {
     return () => clearTimeout(timeout);
   }, [email]);
 
-  // 4. Business Name Validation API
+  // Business Name + Username Suggestion Validation
   useEffect(() => {
     const checkBusinessName = async () => {
       if (!businessName) {
@@ -121,6 +120,7 @@ export default function RegistrationScreen2() {
       }
       setBusinessNameValidity((p) => ({ ...p, loading: true, valid: null }));
       try {
+        // API Call to check business name availability
         const response = await fetch(
           `${CONFIG.API_ENDPOINT}/api/auth/validate/business-name`,
           {
@@ -130,13 +130,38 @@ export default function RegistrationScreen2() {
           },
         );
         const data = await response.json();
+
         setBusinessNameValidity({
           valid: data?.data?.is_available,
           loading: false,
-          message: !data?.data?.is_available
-            ? "Business name already taken"
-            : "",
+          message: !data?.data?.is_available ? "Business name taken" : "",
         });
+
+        // TRIGGER USERNAME SUGGESTION API
+        if (data?.data?.is_available) {
+          const userRes = await fetch(
+            `${CONFIG.API_ENDPOINT}/api/auth/validate/username`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                username: businessName.replace(/\s+/g, "").toLowerCase(),
+              }),
+            },
+          );
+          const userData = await userRes.json();
+          // If username taken, backend usually provides suggestions. We store the first suggestion.
+          if (
+            userData?.data?.suggestions &&
+            userData.data.suggestions.length > 0
+          ) {
+            updateFormData({ username: userData.data.suggestions[0] });
+          } else {
+            updateFormData({
+              username: businessName.replace(/\s+/g, "").toLowerCase(),
+            });
+          }
+        }
       } catch (err) {
         setBusinessNameValidity({
           valid: false,
@@ -145,9 +170,21 @@ export default function RegistrationScreen2() {
         });
       }
     };
-    const timeout = setTimeout(checkBusinessName, 500);
+    const timeout = setTimeout(checkBusinessName, 600);
     return () => clearTimeout(timeout);
   }, [businessName]);
+
+  const handleNext = () => {
+    const dialCodeRaw = countryData?.phone?.[0] || "0";
+    updateFormData({
+      first_name: businessName,
+      email: email,
+      phone: phone,
+      country: selectedCountry,
+      phone_country_code: parseInt(String(dialCodeRaw), 10),
+    });
+    router.push("/screens/Registration/stage-3");
+  };
 
   const canGoNext =
     emailValidity.valid && businessNameValidity.valid && phone.length > 5;
@@ -169,10 +206,7 @@ export default function RegistrationScreen2() {
     },
   };
 
-  const renderStatusIcon = (validity: {
-    valid: boolean | null;
-    loading: boolean;
-  }) => {
+  const renderStatusIcon = (validity: any) => {
     if (validity.loading)
       return <ActivityIndicator size="small" color={theme.colors.primary} />;
     if (validity.valid === true)
@@ -203,7 +237,6 @@ export default function RegistrationScreen2() {
         colors={theme.colors.gradient as any}
         style={StyleSheet.absoluteFillObject}
       />
-
       <ScrollView
         contentContainerStyle={[
           styles.scrollContent,
@@ -219,7 +252,6 @@ export default function RegistrationScreen2() {
           style={styles.logo}
           resizeMode="contain"
         />
-
         <View style={styles.textHeader}>
           <Text style={[styles.title, { color: theme.colors.text }]}>
             Company Details
@@ -238,7 +270,6 @@ export default function RegistrationScreen2() {
             },
           ]}
         >
-          {/* Business Name */}
           <View style={styles.inputGroup}>
             <Text style={[styles.label, { color: theme.colors.text }]}>
               Business Name
@@ -272,7 +303,6 @@ export default function RegistrationScreen2() {
             ) : null}
           </View>
 
-          {/* Contact Number with Modal Trigger */}
           <View style={styles.inputGroup}>
             <Text style={[styles.label, { color: theme.colors.text }]}>
               Contact Number
@@ -314,7 +344,6 @@ export default function RegistrationScreen2() {
             </View>
           </View>
 
-          {/* Email */}
           <View style={styles.inputGroup}>
             <Text style={[styles.label, { color: theme.colors.text }]}>
               Email Address
@@ -364,7 +393,6 @@ export default function RegistrationScreen2() {
                 Back
               </Text>
             </TouchableOpacity>
-
             <TouchableOpacity
               style={[
                 styles.navButton,
@@ -372,9 +400,7 @@ export default function RegistrationScreen2() {
                   backgroundColor: canGoNext ? theme.colors.primary : "#CBD5E1",
                 },
               ]}
-              onPress={() =>
-                canGoNext && router.push("/screens/Registration/stage-3")
-              }
+              onPress={handleNext}
               disabled={!canGoNext}
             >
               <Text style={styles.nextButtonText}>Next</Text>
@@ -384,7 +410,6 @@ export default function RegistrationScreen2() {
         <FooterLinks />
       </ScrollView>
 
-      {/* Country Selection Modal */}
       <Modal visible={isModalVisible} animationType="slide" transparent={true}>
         <View style={styles.modalOverlay}>
           <View
@@ -401,9 +426,8 @@ export default function RegistrationScreen2() {
                 <Ionicons name="close" size={24} color={theme.colors.text} />
               </TouchableOpacity>
             </View>
-
             <TextInput
-              placeholder="Search country..."
+              placeholder="Search..."
               placeholderTextColor={theme.colors.subText}
               style={[
                 styles.searchInput,
@@ -414,7 +438,6 @@ export default function RegistrationScreen2() {
               ]}
               onChangeText={setSearchQuery}
             />
-
             <FlatList
               data={countryList}
               keyExtractor={(item) => item.code}
@@ -505,8 +528,6 @@ const styles = StyleSheet.create({
   },
   backButtonText: { fontWeight: "700", fontSize: 16 },
   nextButtonText: { color: "#FFF", fontWeight: "700", fontSize: 16 },
-
-  // Modal Styles
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
