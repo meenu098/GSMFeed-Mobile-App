@@ -116,7 +116,17 @@ export default function BottomNav() {
             return (
               <TouchableOpacity
                 key={index}
-                onPress={() => !isActive && router.push(item.route)}
+                onPress={() => {
+                  if (item.name === "Profile") {
+                    if (isActive) {
+                      router.replace(item.route);
+                    } else {
+                      router.push(item.route);
+                    }
+                    return;
+                  }
+                  if (!isActive) router.push(item.route);
+                }}
                 style={styles.iconButton}
               >
                 {item.name === "Profile" ? (

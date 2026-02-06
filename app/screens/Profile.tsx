@@ -40,6 +40,7 @@ import CONFIG from "../../shared/config";
 import { useTheme } from "../../shared/themeContext";
 
 const { width } = Dimensions.get("window");
+const COVER_FALLBACK = require("../../assets/common/big-earth.png");
 const CARD_WIDTH = width - 30;
 const IMAGE_WIDTH = CARD_WIDTH - 30;
 
@@ -1128,6 +1129,20 @@ export default function ProfileScreen() {
     isDark,
   };
 
+  const formatMediaUrl = (url?: string | null) => {
+    if (!url) return null;
+    return url.replace("http://localhost:8000", CONFIG.API_ENDPOINT);
+  };
+
+  const profileName = userData?.name || userData?.username || "User";
+  const avatarUri = formatMediaUrl(userData?.avatar || userData?.avatar_url);
+  const coverUri = formatMediaUrl(
+    userData?.cover || userData?.cover_url || userData?.avatar || userData?.avatar_url,
+  );
+  const fallbackAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(
+    profileName,
+  )}&background=3B66F5&color=fff`;
+
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
@@ -1198,6 +1213,13 @@ export default function ProfileScreen() {
     } catch (error) {}
   }, []);
 
+  const openContactsTab = useCallback(
+    (targetTab: "Followers" | "Following" | "Suggestions") => {
+      router.push({ pathname: "/screens/Contacts", params: { tab: targetTab } });
+    },
+    [router],
+  );
+
   if (loading)
     return (
       <View style={styles.centered}>
@@ -1211,7 +1233,7 @@ export default function ProfileScreen() {
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={styles.coverContainer}>
           <Image
-            source={{ uri: userData?.cover || userData?.avatar }}
+            source={coverUri ? { uri: coverUri } : COVER_FALLBACK}
             style={styles.coverImage}
             resizeMode="cover"
           />
@@ -1229,7 +1251,7 @@ export default function ProfileScreen() {
 
         <View style={styles.profileInfo}>
           <Image
-            source={{ uri: userData?.avatar }}
+            source={{ uri: avatarUri || fallbackAvatar }}
             style={styles.profileAvatar}
           />
           <View style={styles.nameRowCenter}>
@@ -1270,18 +1292,28 @@ export default function ProfileScreen() {
             </Text>
             <Text style={styles.statLab}>Posts</Text>
           </View>
-          <View style={styles.stat}>
+          <TouchableOpacity
+            style={styles.stat}
+            activeOpacity={isOwnProfile ? 0.7 : 1}
+            disabled={!isOwnProfile}
+            onPress={() => isOwnProfile && openContactsTab("Followers")}
+          >
             <Text style={[styles.statVal, { color: theme.text }]}>
               {userData?.followers_count || 0}
             </Text>
             <Text style={styles.statLab}>Followers</Text>
-          </View>
-          <View style={styles.stat}>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.stat}
+            activeOpacity={isOwnProfile ? 0.7 : 1}
+            disabled={!isOwnProfile}
+            onPress={() => isOwnProfile && openContactsTab("Following")}
+          >
             <Text style={[styles.statVal, { color: theme.text }]}>
               {userData?.following_count || 0}
             </Text>
             <Text style={styles.statLab}>Following</Text>
-          </View>
+          </TouchableOpacity>
         </View>
 
         <View
@@ -1335,6 +1367,7 @@ const styles = StyleSheet.create({
     borderRadius: 50,
     borderWidth: 3,
     borderColor: "#0B0E14",
+    backgroundColor: "#1F2937",
   },
   nameRowCenter: {
     flexDirection: "row",

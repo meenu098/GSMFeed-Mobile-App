@@ -1,6 +1,6 @@
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -28,6 +28,7 @@ export default function ContactsScreen() {
   const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { tab } = useLocalSearchParams();
 
   const [activeTab, setActiveTab] = useState("Following");
   const [contacts, setContacts] = useState<any[]>([]);
@@ -106,6 +107,12 @@ export default function ContactsScreen() {
     setPage(1);
     fetchContacts(1, true);
   }, [activeTab]);
+
+  useEffect(() => {
+    if (typeof tab === "string" && tabMapping[tab]) {
+      setActiveTab(tab);
+    }
+  }, [tab]);
 
   const handleLoadMore = () => {
     if (hasMore && !loading && !refreshing) {
