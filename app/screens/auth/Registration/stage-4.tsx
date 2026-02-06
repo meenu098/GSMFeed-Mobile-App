@@ -20,8 +20,8 @@
 // } from "react-native";
 // import Recaptcha from "react-native-recaptcha-that-works";
 // import { useSafeAreaInsets } from "react-native-safe-area-context";
-// import FooterLinks from "../../navigation/FooterLinks";
-// import { useTheme } from "../../utils/themeContext";
+// import FooterLinks from "../../../../components/FooterLinks";
+// import { useTheme } from "../../../../shared/themeContext";
 
 // // Define the Ref type locally for absolute compatibility
 // interface RecaptchaRef {
@@ -106,7 +106,7 @@
 
 //   const handleNext = () => {
 //     if (canGoNext) {
-//       router.push("/screens/Registration/stage-5");
+//       router.push("/screens/auth/Registration/stage-5");
 //     } else if (!captchaToken) {
 //       Alert.alert(
 //         "Verification Required",
@@ -144,8 +144,8 @@
 //         <Image
 //           source={
 //             isDark
-//               ? require("../../../assets/common/logo-dark.png")
-//               : require("../../../assets/common/logo.png")
+//               ? require("../../../../assets/common/logo-dark.png")
+//               : require("../../../../assets/common/logo.png")
 //           }
 //           style={styles.logo}
 //           resizeMode="contain"
@@ -526,8 +526,8 @@ import {
 } from "react-native";
 import Recaptcha from "react-native-recaptcha-that-works";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import FooterLinks from "../../navigation/FooterLinks";
-import { useTheme } from "../../utils/themeContext";
+import FooterLinks from "../../../../components/FooterLinks";
+import { useTheme } from "../../../../shared/themeContext";
 
 // Interface for the reCAPTCHA ref
 interface RecaptchaRef {
@@ -630,8 +630,8 @@ export default function RegistrationScreen4() {
         <Image
           source={
             isDark
-              ? require("../../../assets/common/logo-dark.png")
-              : require("../../../assets/common/logo.png")
+              ? require("../../../../assets/common/logo-dark.png")
+              : require("../../../../assets/common/logo.png")
           }
           style={styles.logo}
           resizeMode="contain"
@@ -782,7 +782,7 @@ export default function RegistrationScreen4() {
                 </Text>
               </View>
               <Image
-                // source={require("../../../assets/common/recaptcha-logo.png")}
+                // source={require("../../../../assets/common/recaptcha-logo.png")}
                 style={styles.recaptchaLogo}
               />
             </TouchableOpacity>
@@ -812,7 +812,7 @@ export default function RegistrationScreen4() {
                 },
               ]}
               onPress={() =>
-                canGoNext && router.push("/screens/Registration/stage-5")
+                canGoNext && router.push("/screens/auth/Registration/stage-5")
               }
               disabled={!canGoNext}
             >

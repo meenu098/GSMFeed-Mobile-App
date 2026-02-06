@@ -10,11 +10,14 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import CONFIG from "../utils/config";
-import { useTheme } from "../utils/themeContext";
+import CONFIG from "../../shared/config";
+import { useTheme } from "../../shared/themeContext";
 
 // Import your modal file
-import { AddressInfoModal, PersonalInfoModal } from "../screens/PersonalInfo";
+import {
+  AddressInfoModal,
+  PersonalInfoModal,
+} from "../../components/PersonalInfo";
 
 const PersonalDetailsScreen = () => {
   const { isDark } = useTheme();

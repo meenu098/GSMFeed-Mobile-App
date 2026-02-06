@@ -21,7 +21,7 @@ import {
   PrivacyIcon,
 } from "../../components/icons/sidebarIcon";
 import SidebarOverlay from "../../components/SidebarOverlay";
-import { useTheme } from "../utils/themeContext";
+import { useTheme } from "../../shared/themeContext";
 
 // Updated SettingRow to handle both Font Icons and SVG Components
 const SettingRow = ({

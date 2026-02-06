@@ -9,8 +9,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CloseIcon } from "../../components/icons/icons";
-import ScreenWrapper from "../utils/screenWrapper";
-import { useTheme } from "../utils/themeContext";
+import ScreenWrapper from "../../shared/screenWrapper";
+import { useTheme } from "../../shared/themeContext";
 
 const Privacy = () => {
   const router = useRouter();

@@ -4,7 +4,7 @@ import React from "react";
 import { Modal, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CloseIcon, WTBIcon, WTSIcon } from "../../components/icons/icons";
-import { useTheme } from "../utils/themeContext";
+import { useTheme } from "../../shared/themeContext";
 
 interface BroadcastSelectionProps {
   visible: boolean;

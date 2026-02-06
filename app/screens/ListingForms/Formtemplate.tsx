@@ -13,7 +13,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useTheme } from "../../utils/themeContext";
+import { useTheme } from "../../../shared/themeContext";
 
 const { width } = Dimensions.get("window");
 

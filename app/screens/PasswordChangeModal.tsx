@@ -13,8 +13,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import CONFIG from "../utils/config";
-import { useTheme } from "../utils/themeContext";
+import CONFIG from "../../shared/config";
+import { useTheme } from "../../shared/themeContext";
 
 const PasswordChangeModal = ({ visible, onClose }: any) => {
   const { isDark } = useTheme();

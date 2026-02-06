@@ -18,8 +18,8 @@ import Animated, {
   LinearTransition,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import FooterLinks from "../../navigation/FooterLinks";
-import { useTheme } from "../../utils/themeContext";
+import FooterLinks from "../../../../components/FooterLinks";
+import { useTheme } from "../../../../shared/themeContext";
 
 export default function RegistrationScreen5() {
   const router = useRouter();
@@ -96,8 +96,8 @@ export default function RegistrationScreen5() {
         <Image
           source={
             isDark
-              ? require("../../../assets/common/logo-dark.png")
-              : require("../../../assets/common/logo.png")
+              ? require("../../../../assets/common/logo-dark.png")
+              : require("../../../../assets/common/logo.png")
           }
           style={styles.logo}
           resizeMode="contain"
@@ -213,7 +213,7 @@ export default function RegistrationScreen5() {
                 },
               ]}
               onPress={() =>
-                canGoNext && router.push("/screens/Registration/stage-6")
+                canGoNext && router.push("/screens/auth/Registration/stage-6")
               }
             >
               <Text style={styles.nextText}>Next</Text>

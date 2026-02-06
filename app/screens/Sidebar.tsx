@@ -18,8 +18,8 @@ import {
   NewsFeedMenuIcons,
   Settings,
 } from "../../components/icons/sidebarIcon";
-import CONFIG from "../utils/config";
-import { useTheme } from "../utils/themeContext";
+import CONFIG from "../../shared/config";
+import { useTheme } from "../../shared/themeContext";
 
 export default function Sidebar() {
   const router = useRouter();
@@ -224,7 +224,7 @@ export default function Sidebar() {
             />
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={() => router.replace("/screens/Login")}>
+          <TouchableOpacity onPress={() => router.replace("/screens/auth/Login")}>
             <Feather name="log-out" size={22} color={themeColors.text} />
           </TouchableOpacity>
         </View>

@@ -1,7 +1,7 @@
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { ThemeProvider, useTheme } from "../utils/themeContext";
+import { ThemeProvider, useTheme } from "../../shared/themeContext";
 
 function RootLayoutNav() {
   const { isDark } = useTheme();
@@ -15,8 +15,6 @@ function RootLayoutNav() {
           contentStyle: { backgroundColor: isDark ? "#000" : "#FFF" },
         }}
       >
-        <Stack.Screen name="index" />
-        <Stack.Screen name="Login" />
         <Stack.Screen
           name="BroadcastManager"
           options={{
@@ -24,10 +22,6 @@ function RootLayoutNav() {
             animation: "slide_from_bottom",
           }}
         />
-
-        {/* Other Screens */}
-        <Stack.Screen name="Notifications" />
-        <Stack.Screen name="Profile" />
       </Stack>
     </SafeAreaProvider>
   );

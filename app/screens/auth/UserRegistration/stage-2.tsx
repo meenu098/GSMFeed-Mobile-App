@@ -10,7 +10,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import FooterLinks from "../../navigation/FooterLinks";
+import FooterLinks from "../../../../components/FooterLinks";
 
 export default function UserRegistrationScreen1() {
   const router = useRouter();
@@ -27,75 +27,75 @@ export default function UserRegistrationScreen1() {
         ]}
         showsVerticalScrollIndicator={false}
       >
+        {/* Logo & Title */}
         <Image
-          source={require("../../../assets/common/logo-dark.png")}
+          source={require("../../../../assets/common/logo-dark.png")}
           style={styles.logo}
           resizeMode="contain"
         />
         <Text style={styles.title}>Registration</Text>
 
+        {/* Form Card */}
         <View style={styles.card}>
+          {/* Date of Birth */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>First Name</Text>
+            <Text style={styles.label}>Date of Birth</Text>
+            <TextInput
+              placeholder="eg: 01/01/1990"
+              placeholderTextColor="#999"
+              style={styles.input}
+            />
+          </View>
+
+          {/* Country */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Country</Text>
+            <TextInput
+              placeholder="eg: USA"
+              placeholderTextColor="#999"
+              style={styles.input}
+            />
+          </View>
+
+          {/* Company */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Company</Text>
             <TextInput
               placeholder="eg: XYZ Co"
               placeholderTextColor="#999"
               style={styles.input}
             />
           </View>
+
+          {/* Position */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Last Name</Text>
+            <Text style={styles.label}>Position</Text>
             <TextInput
-              placeholder="eg: XYZ Co"
+              placeholder="eg: Manager"
               placeholderTextColor="#999"
               style={styles.input}
             />
           </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Contact Number</Text>
-            <View style={styles.phoneRow}>
-              <View style={styles.flagBox}>
-                <Image
-                  source={{ uri: "https://flagcdn.com/w20/ae.png" }}
-                  style={styles.flag}
-                />
-                <Text style={styles.prefix}>+971</Text>
-              </View>
-              <TextInput
-                placeholder="eg: 561234567"
-                placeholderTextColor="#999"
-                keyboardType="phone-pad"
-                style={[styles.input, { flex: 1 }]}
-              />
-            </View>
+          {/* Navigation Buttons */}
+          <View style={styles.navButtons}>
+            <TouchableOpacity
+              style={[styles.navButton, styles.backButton]}
+              onPress={() => router.back()}
+            >
+              <Text style={styles.backButtonText}>Back</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.navButton, styles.nextButton]}
+              onPress={() => router.push("../Registration/stage-5")}
+            >
+              <Text style={styles.nextButtonText}>Next</Text>
+            </TouchableOpacity>
           </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              placeholder="eg: info@xyz.com"
-              placeholderTextColor="#999"
-              keyboardType="email-address"
-              style={styles.input}
-            />
-          </View>
-
-          <TouchableOpacity
-            style={[styles.navButton, styles.backButton]}
-            onPress={() => router.push("../Registration/stage-1")}
-          >
-            <Text style={styles.backButtonText}>Back</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.button}
-            onPress={() => router.push("/screens/UserRegistration/stage-2")}
-          >
-            <Text style={styles.buttonText}>Next</Text>
-          </TouchableOpacity>
         </View>
 
+        {/* Footer Links */}
         <FooterLinks />
       </ScrollView>
     </ImageBackground>
@@ -159,35 +159,31 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#000",
   },
-  phoneRow: {
+  navButtons: {
     flexDirection: "row",
-    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 20,
   },
-  flagBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginRight: 10,
-  },
-  flag: {
-    width: 20,
-    height: 14,
-    marginRight: 5,
-  },
-  prefix: {
-    color: "#333",
-    fontWeight: "500",
-  },
-  button: {
-    backgroundColor: "#007bff",
-    paddingVertical: 14,
+  navButton: {
+    flex: 1,
+    paddingVertical: 12,
     borderRadius: 10,
     alignItems: "center",
-    marginTop: 10,
+    marginHorizontal: 5,
   },
-  buttonText: {
+  backButton: {
+    backgroundColor: "#ccc",
+  },
+  nextButton: {
+    backgroundColor: "#007bff",
+  },
+  backButtonText: {
+    color: "#333",
+    fontWeight: "600",
+  },
+  nextButtonText: {
     color: "#fff",
     fontWeight: "600",
-    fontSize: 16,
   },
   bottomLinks: {
     marginTop: 10,
@@ -200,20 +196,4 @@ const styles = StyleSheet.create({
     color: "#ccc",
     fontSize: 12,
   },
-  avButtons: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 10,
-  },
-  navButton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  backButton: {
-    backgroundColor: "#e0e0e0",
-    marginRight: 10,
-  },
-  backButtonText: { color: "#333", fontWeight: "600", fontSize: 16 },
 });

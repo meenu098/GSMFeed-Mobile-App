@@ -12,8 +12,8 @@ import {
   View,
 } from "react-native";
 
-import CONFIG from "../app/utils/config";
-import { useTheme } from "../app/utils/themeContext";
+import CONFIG from "../shared/config";
+import { useTheme } from "../shared/themeContext";
 import { Home, Message, Search, User } from "../components/icons/bottomNavIcon";
 
 const { width } = Dimensions.get("window");

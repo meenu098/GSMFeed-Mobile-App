@@ -16,46 +16,21 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import FooterLinks from "../navigation/FooterLinks";
-import CONFIG from "../utils/config";
-import { setUser } from "../utils/storage";
-// Import your theme context
-import { useTheme } from "../utils/themeContext";
+import FooterLinks from "../../../components/FooterLinks";
+import CONFIG from "../../../shared/config";
+import { setUser } from "../../../shared/storage";
 
-const { width } = Dimensions.get("window");
+const { height, width } = Dimensions.get("window");
 
 const Login = () => {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  // 1. Hook into your theme context
-  const { isDark } = useTheme();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(false);
   const [secure, setSecure] = useState(true);
   const [loading, setLoading] = useState(false);
-
-  // 2. Define dynamic theme based on isDark
-  const theme = {
-    colors: {
-      primary: "#3B66F5",
-      background: isDark ? "#020205" : "#F8FAFC",
-      surface: isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.03)",
-      border: isDark ? "rgba(255, 255, 255, 0.2)" : "rgba(0, 0, 0, 0.1)",
-      text: isDark ? "#FFFFFF" : "#0F172A",
-      textMuted: isDark ? "#94A3B8" : "#64748B",
-      // If Light mode, maybe use a lighter gradient or just a solid color
-      gradient: isDark
-        ? (["#1A0B2E", "#020205", "#050A1A"] as const)
-        : (["#F1F5F9", "#F8FAFC", "#FFFFFF"] as const),
-    },
-    spacing: {
-      padding: 35,
-      borderRadius: 16,
-      inputHeight: 64,
-    },
-  };
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -79,8 +54,9 @@ const Login = () => {
         Alert.alert("Login Failed", data?.message || "Invalid credentials");
         return;
       }
+
       await setUser(data.data);
-      router.replace("/screens/Newsfeed");
+      router.replace("/screens/Contacts");
     } catch (error) {
       Alert.alert("Network Error", "Unable to connect to server.");
     } finally {
@@ -89,61 +65,51 @@ const Login = () => {
   };
 
   return (
-    <View
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
+    <View style={styles.container}>
       <StatusBar
-        barStyle={isDark ? "light-content" : "dark-content"}
-        translucent
+        barStyle="light-content"
+        translucent={true}
         backgroundColor="transparent"
       />
+
       <Stack.Screen options={{ headerShown: false }} />
 
       <LinearGradient
-        colors={theme.colors.gradient}
+        colors={["#1A0B2E", "#020205", "#050A1A"]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFillObject}
+        style={StyleSheet.absoluteFillObject} // Fill entire screen
       />
 
       <ScrollView
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingTop: insets.top + 60, paddingBottom: insets.bottom + 20 },
+          {
+            paddingTop: insets.top + 60,
+            paddingBottom: insets.bottom + 20,
+          },
         ]}
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
         <Image
-          source={
-            isDark
-              ? require("../../assets/common/logo-dark.png")
-              : require("../../assets/common/logo.png") // Ensure you have a light logo
-          }
+          source={require("../../../assets/common/logo-dark.png")}
           style={styles.logo}
           resizeMode="contain"
         />
 
         <View style={styles.formContainer}>
-          <View
-            style={[
-              styles.inputBox,
-              {
-                backgroundColor: theme.colors.surface,
-                borderColor: theme.colors.border,
-              },
-            ]}
-          >
+          <View style={styles.inputBox}>
             <Ionicons
               name="mail-outline"
               size={20}
-              color={theme.colors.text}
+              color="#FFFFFF"
               style={{ opacity: 0.7 }}
             />
             <TextInput
-              style={[styles.input, { color: theme.colors.text }]}
+              style={styles.input}
               placeholder="Email address"
-              placeholderTextColor={theme.colors.textMuted}
+              placeholderTextColor="#94A3B8"
               keyboardType="email-address"
               autoCapitalize="none"
               value={email}
@@ -151,25 +117,17 @@ const Login = () => {
             />
           </View>
 
-          <View
-            style={[
-              styles.inputBox,
-              {
-                backgroundColor: theme.colors.surface,
-                borderColor: theme.colors.border,
-              },
-            ]}
-          >
+          <View style={styles.inputBox}>
             <Ionicons
               name="lock-closed-outline"
               size={20}
-              color={theme.colors.text}
+              color="#FFFFFF"
               style={{ opacity: 0.7 }}
             />
             <TextInput
-              style={[styles.input, { color: theme.colors.text }]}
+              style={styles.input}
               placeholder="Password"
-              placeholderTextColor={theme.colors.textMuted}
+              placeholderTextColor="#94A3B8"
               secureTextEntry={secure}
               value={password}
               onChangeText={setPassword}
@@ -178,7 +136,7 @@ const Login = () => {
               <Ionicons
                 name={secure ? "eye-off-outline" : "eye-outline"}
                 size={20}
-                color={theme.colors.text}
+                color="#FFFFFF"
                 style={{ opacity: 0.7 }}
               />
             </TouchableOpacity>
@@ -189,39 +147,19 @@ const Login = () => {
               style={styles.rememberMe}
               onPress={() => setRemember(!remember)}
             >
-              <View
-                style={[
-                  styles.radio,
-                  { borderColor: theme.colors.textMuted },
-                  remember && { borderColor: theme.colors.primary },
-                ]}
-              >
-                {remember && (
-                  <View
-                    style={[
-                      styles.radioInner,
-                      { backgroundColor: theme.colors.primary },
-                    ]}
-                  />
-                )}
+              <View style={[styles.radio, remember && styles.radioActive]}>
+                {remember && <View style={styles.radioInner} />}
               </View>
-              <Text style={[styles.subText, { color: theme.colors.text }]}>
-                Remember me
-              </Text>
+              <Text style={styles.subText}>Remember me</Text>
             </TouchableOpacity>
 
-            {/* <TouchableOpacity>
-              <Text style={[styles.subText, { color: theme.colors.text }]}>
-                Forgot password?
-              </Text>
-            </TouchableOpacity> */}
+            <TouchableOpacity>
+              <Text style={styles.subText}>Forgot password?</Text>
+            </TouchableOpacity>
           </View>
 
           <TouchableOpacity
-            style={[
-              styles.loginButton,
-              { backgroundColor: theme.colors.primary },
-            ]}
+            style={styles.loginButton}
             onPress={handleLogin}
             disabled={loading}
           >
@@ -234,11 +172,9 @@ const Login = () => {
 
           <TouchableOpacity
             style={styles.signUpButton}
-            onPress={() => router.push("/screens/Registration/stage-1")}
+            onPress={() => router.push("/screens/auth/Registration/stage-1")}
           >
-            <Text style={[styles.signUpText, { color: theme.colors.primary }]}>
-              Sign up
-            </Text>
+            <Text style={styles.signUpText}>Sign up</Text>
           </TouchableOpacity>
         </View>
 
@@ -248,22 +184,41 @@ const Login = () => {
   );
 };
 
-// Styles remain largely the same, but remove hardcoded colors
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  scrollContent: { flexGrow: 1, paddingHorizontal: 35, alignItems: "center" },
-  logo: { width: width * 0.5, height: 80, marginBottom: 60 },
-  formContainer: { width: "100%" },
+  container: {
+    flex: 1,
+    backgroundColor: "#020205",
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: 35,
+    alignItems: "center",
+  },
+  logo: {
+    width: width * 0.5,
+    height: 80,
+    marginBottom: 60,
+  },
+  formContainer: {
+    width: "100%",
+  },
   inputBox: {
     flexDirection: "row",
     alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
     borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.2)",
     borderRadius: 16,
     paddingHorizontal: 18,
     height: 64,
     marginBottom: 16,
   },
-  input: { flex: 1, marginLeft: 12, fontSize: 15 },
+  input: {
+    flex: 1,
+    marginLeft: 12,
+    fontSize: 15,
+    color: "#FFFFFF",
+  },
   rowActions: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -271,27 +226,71 @@ const styles = StyleSheet.create({
     marginTop: 10,
     marginBottom: 35,
   },
-  rememberMe: { flexDirection: "row", alignItems: "center" },
+  rememberMe: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
   radio: {
     width: 20,
     height: 20,
     borderRadius: 10,
     borderWidth: 1.5,
+    borderColor: "rgba(255, 255, 255, 0.6)",
     marginRight: 10,
     justifyContent: "center",
     alignItems: "center",
   },
-  radioInner: { width: 10, height: 10, borderRadius: 5 },
-  subText: { fontSize: 14, opacity: 0.8 },
+  radioActive: {
+    borderColor: "#3B66F5",
+  },
+  radioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#3B66F5",
+  },
+  subText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    opacity: 0.8,
+  },
   loginButton: {
+    backgroundColor: "#3B66F5",
     height: 62,
     borderRadius: 16,
     justifyContent: "center",
     alignItems: "center",
   },
-  loginText: { color: "#fff", fontSize: 18, fontWeight: "600" },
-  signUpButton: { marginTop: 25, alignItems: "center" },
-  signUpText: { fontSize: 16, fontWeight: "500" },
+  loginText: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "600",
+  },
+  signUpButton: {
+    marginTop: 25,
+    alignItems: "center",
+  },
+  signUpText: {
+    color: "#3B66F5",
+    fontSize: 16,
+    fontWeight: "500",
+  },
+  footer: {
+    flexDirection: "row",
+    marginTop: 40,
+    alignItems: "center",
+    paddingBottom: 20,
+  },
+  footerLink: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    opacity: 0.6,
+  },
+  footerDivider: {
+    color: "#FFFFFF",
+    marginHorizontal: 15,
+    opacity: 0.3,
+  },
 });
 
 export default Login;

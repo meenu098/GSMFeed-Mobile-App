@@ -14,9 +14,9 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import FooterLinks from "../../navigation/FooterLinks";
-import CONFIG from "../../utils/config";
-import { useTheme } from "../../utils/themeContext";
+import FooterLinks from "../../../../components/FooterLinks";
+import CONFIG from "../../../../shared/config";
+import { useTheme } from "../../../../shared/themeContext";
 
 export default function RegistrationScreen6() {
   const router = useRouter();
@@ -91,7 +91,7 @@ export default function RegistrationScreen6() {
         ]}
       >
         <Image
-          source={require("../../../assets/common/logo-dark.png")}
+          source={require("../../../../assets/common/logo-dark.png")}
           style={styles.logo}
           resizeMode="contain"
         />

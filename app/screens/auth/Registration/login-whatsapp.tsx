@@ -29,7 +29,7 @@ const LoginWithWhatsApp = () => {
       />
 
       <ImageBackground
-        source={require("../../../assets/common/big-earth.png")}
+        source={require("../../../../assets/common/big-earth.png")}
         style={styles.bgImage}
         imageStyle={{ opacity: 0.8 }}
       >
@@ -44,7 +44,7 @@ const LoginWithWhatsApp = () => {
             {/* Logo Section */}
             <View style={styles.header}>
               <Image
-                source={require("../../../assets/common/logo-dark.png")}
+                source={require("../../../../assets/common/logo-dark.png")}
                 style={styles.logo}
                 resizeMode="contain"
               />
@@ -91,7 +91,7 @@ const LoginWithWhatsApp = () => {
 
               <TouchableOpacity
                 style={styles.outlineBtn}
-                onPress={() => router.push("/screens/Login")}
+                onPress={() => router.push("/screens/auth/Login")}
               >
                 <Ionicons
                   name="key-outline"
@@ -105,7 +105,7 @@ const LoginWithWhatsApp = () => {
               <View style={styles.signupContainer}>
                 <Text style={styles.noAccountText}>Dont have an account? </Text>
                 <TouchableOpacity
-                  onPress={() => router.push("/screens/Registration/stage-1")}
+                  onPress={() => router.push("/screens/auth/Registration/stage-1")}
                 >
                   <Text style={styles.signupLink}>Sign Up</Text>
                 </TouchableOpacity>

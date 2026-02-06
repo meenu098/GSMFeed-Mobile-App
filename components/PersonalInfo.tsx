@@ -14,8 +14,8 @@ import {
     View,
 } from "react-native";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
-import CONFIG from "../utils/config";
-import { useTheme } from "../utils/themeContext";
+import CONFIG from "../shared/config";
+import { useTheme } from "../shared/themeContext";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 

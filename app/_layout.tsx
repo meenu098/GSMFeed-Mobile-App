@@ -1,7 +1,7 @@
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { ThemeProvider, useTheme } from "./utils/themeContext";
+import { ThemeProvider, useTheme } from "../shared/themeContext";
 
 function RootLayoutNav() {
   const { isDark } = useTheme();
@@ -22,22 +22,7 @@ function RootLayoutNav() {
             flex: 1,
           },
         }}
-      >
-        <Stack.Screen name="screens/index" />
-        <Stack.Screen name="screens/Login" />
-        <Stack.Screen name="screens/Newsfeed" />
-        <Stack.Screen name="screens/Notifications" />
-        <Stack.Screen name="screens/Profile" />
-        <Stack.Screen name="screens/Pricelist" />
-
-        <Stack.Screen
-          name="screens/BroadcastManager"
-          options={{
-            presentation: "modal",
-            animation: "slide_from_bottom",
-          }}
-        />
-      </Stack>
+      />
     </SafeAreaProvider>
   );
 }
@@ -53,11 +38,11 @@ export default function RootLayout() {
 // import { Stack } from "expo-router";
 // import { StatusBar } from "expo-status-bar";
 // import { SafeAreaProvider } from "react-native-safe-area-context";
-// import { ThemeProvider, useTheme } from "./utils/themeContext";
+// import { ThemeProvider, useTheme } from "../shared/themeContext";
 
 // // 1. Import Redux requirements
 // import { Provider } from "react-redux";
-// import { store } from "./redux/store";
+// import { store } from "../redux/store";
 
 // function RootLayoutNav() {
 //   const { isDark } = useTheme();
@@ -80,7 +65,7 @@ export default function RootLayout() {
 //         }}
 //       >
 //         <Stack.Screen name="screens/index" />
-//         <Stack.Screen name="screens/Login" />
+//         <Stack.Screen name="screens/auth/Login" />
 //         <Stack.Screen name="screens/Newsfeed" />
 //         <Stack.Screen name="screens/Notifications" />
 //         <Stack.Screen name="screens/Profile" />

@@ -1,6 +1,8 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Dimensions,
   Image,
   ImageBackground,
@@ -12,14 +14,43 @@ import {
 } from "react-native";
 import { SvgUri } from "react-native-svg";
 import { OpenAISvg } from "../components/icons/bottomNavIcon";
-import FooterLinks from "./navigation/FooterLinks";
-import GradientText from "./utils/gradient";
-import ScreenWrapper from "./utils/screenWrapper";
+import FooterLinks from "../components/FooterLinks";
+import GradientText from "../shared/gradient";
+import ScreenWrapper from "../shared/screenWrapper";
 
 const { height: screenHeight } = Dimensions.get("window");
 
 const Index = () => {
   const router = useRouter();
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    const checkAuth = async () => {
+      try {
+        const user = await AsyncStorage.getItem("user");
+        if (user) {
+          router.replace("/screens/Newsfeed");
+          return;
+        }
+      } finally {
+        if (mounted) setChecking(false);
+      }
+    };
+
+    checkAuth();
+    return () => {
+      mounted = false;
+    };
+  }, [router]);
+
+  if (checking) {
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+        <ActivityIndicator />
+      </View>
+    );
+  }
 
   return (
     <ScreenWrapper bg="#000">
@@ -84,13 +115,13 @@ const Index = () => {
             <View style={styles.buttonGroup}>
               <TouchableOpacity
                 style={styles.loginBtn}
-                onPress={() => router.push("/screens/Login")}
+                onPress={() => router.push("/screens/auth/Login")}
               >
                 <Text style={styles.loginText}>Login</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.primaryButton}
-                onPress={() => router.push("/screens/Registration/stage-1")}
+                onPress={() => router.push("/screens/auth/Registration/stage-1")}
               >
                 <Text style={styles.primaryButtonText}>
                   Join now with free membership

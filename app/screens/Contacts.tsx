@@ -14,8 +14,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import BottomNav from "../../components/BottomNav";
-import CONFIG from "../utils/config";
-import { useTheme } from "../utils/themeContext";
+import CONFIG from "../../shared/config";
+import { useTheme } from "../../shared/themeContext";
 
 const tabMapping: Record<string, string> = {
   Suggestions: "user/suggestions",
@@ -384,8 +384,8 @@ const styles = StyleSheet.create({
 // } from "react-native";
 // import { useSafeAreaInsets } from "react-native-safe-area-context";
 // import BottomNav from "../../components/BottomNav";
-// import CONFIG from "../utils/config";
-// import { useTheme } from "../utils/themeContext";
+// import CONFIG from "../../shared/config";
+// import { useTheme } from "../../shared/themeContext";
 
 // const tabMapping: Record<string, string> = {
 //   Suggestions: "user/suggestions",

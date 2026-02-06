@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import BottomNav from "../../components/BottomNav";
-import { useTheme } from "../utils/themeContext";
+import { useTheme } from "../../shared/themeContext";
 
 export default function ContactsScreen() {
   const { isDark } = useTheme();

@@ -20,8 +20,8 @@ import AvatarEditModal from "../screens/AvatarModalComponent";
 import CoverEditModal from "../screens/CoverPhotoModal";
 import PositionSelectionModal from "../screens/PositionSelectionModal";
 import SocialLinksModal from "../screens/SocialLinkModal";
-import CONFIG from "../utils/config";
-import { useTheme } from "../utils/themeContext";
+import CONFIG from "../../shared/config";
+import { useTheme } from "../../shared/themeContext";
 
 const EditProfileScreen = () => {
   const { isDark } = useTheme();

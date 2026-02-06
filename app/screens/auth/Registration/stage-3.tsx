@@ -20,9 +20,9 @@ import {
 } from "react-native";
 import { Dropdown } from "react-native-element-dropdown";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import FooterLinks from "../../navigation/FooterLinks";
-import CONFIG from "../../utils/config";
-import { useTheme } from "../../utils/themeContext";
+import FooterLinks from "../../../../components/FooterLinks";
+import CONFIG from "../../../../shared/config";
+import { useTheme } from "../../../../shared/themeContext";
 
 const { height } = Dimensions.get("window");
 
@@ -138,8 +138,8 @@ export default function RegistrationScreen3() {
         <Image
           source={
             isDark
-              ? require("../../../assets/common/logo-dark.png")
-              : require("../../../assets/common/logo.png")
+              ? require("../../../../assets/common/logo-dark.png")
+              : require("../../../../assets/common/logo.png")
           }
           style={styles.logo}
           resizeMode="contain"
@@ -323,7 +323,7 @@ export default function RegistrationScreen3() {
                 },
               ]}
               onPress={() =>
-                canGoNext && router.push("/screens/Registration/stage-4")
+                canGoNext && router.push("/screens/auth/Registration/stage-4")
               }
               disabled={!canGoNext}
             >

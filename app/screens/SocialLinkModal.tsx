@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useTheme } from "../utils/themeContext";
+import { useTheme } from "../../shared/themeContext";
 
 const SocialLinksModal = ({ visible, onClose, onSave, initialData }: any) => {
   const { isDark } = useTheme();

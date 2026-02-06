@@ -16,8 +16,8 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import CONFIG from "../utils/config";
-import { useTheme } from "../utils/themeContext";
+import CONFIG from "../../shared/config";
+import { useTheme } from "../../shared/themeContext";
 
 const MessageBubble = ({ item, theme, isDark, currentUserId }: any) => {
   const isMine = item.sender_id === currentUserId;

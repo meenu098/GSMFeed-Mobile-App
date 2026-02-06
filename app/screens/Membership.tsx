@@ -12,7 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useTheme } from "../utils/themeContext";
+import { useTheme } from "../../shared/themeContext";
 
 const { width, height } = Dimensions.get("window");
 

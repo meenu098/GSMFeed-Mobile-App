@@ -11,9 +11,9 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { BusinessMan, CompanySvg } from "../../../components/icons/icons";
-import FooterLinks from "../../navigation/FooterLinks";
-import { useTheme } from "../../utils/themeContext";
+import { BusinessMan, CompanySvg } from "../../../../components/icons/icons";
+import FooterLinks from "../../../../components/FooterLinks";
+import { useTheme } from "../../../../shared/themeContext";
 
 const { width } = Dimensions.get("window");
 
@@ -61,8 +61,8 @@ export default function RegistrationScreen1() {
         <Image
           source={
             isDark
-              ? require("../../../assets/common/logo-dark.png")
-              : require("../../../assets/common/logo.png")
+              ? require("../../../../assets/common/logo-dark.png")
+              : require("../../../../assets/common/logo.png")
           }
           style={styles.logo}
           resizeMode="contain"
@@ -86,7 +86,7 @@ export default function RegistrationScreen1() {
                 borderColor: theme.colors.cardBorder,
               },
             ]}
-            onPress={() => router.push("/screens/Registration/stage-2")}
+            onPress={() => router.push("/screens/auth/Registration/stage-2")}
             activeOpacity={0.7}
           >
             {/* Circle Wrapper added back for better visual hierarchy */}
@@ -116,7 +116,7 @@ export default function RegistrationScreen1() {
                 borderColor: theme.colors.cardBorder,
               },
             ]}
-            onPress={() => router.push("/screens/UserRegistration/stage-1")}
+            onPress={() => router.push("/screens/auth/UserRegistration/stage-1")}
             activeOpacity={0.7}
           >
             <View
@@ -143,7 +143,7 @@ export default function RegistrationScreen1() {
             Already have an account?{" "}
             <Text
               style={[styles.linkText, { color: theme.colors.primary }]}
-              onPress={() => router.push("/screens/Login")}
+              onPress={() => router.push("/screens/auth/Login")}
             >
               Log in
             </Text>
