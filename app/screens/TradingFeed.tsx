@@ -1,14 +1,17 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { countries } from "countries-list";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Easing,
   FlatList,
   Image,
+  KeyboardAvoidingView,
   LayoutAnimation,
   Modal,
   Platform,
@@ -42,6 +45,7 @@ type PickerType =
 const TradingFeed = () => {
   const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const [search, setSearch] = useState("");
   const [feeds, setFeeds] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,6 +77,12 @@ const TradingFeed = () => {
   const [productOptions, setProductOptions] = useState<any[]>([]);
   const [productLoading, setProductLoading] = useState(false);
   const [productOpen, setProductOpen] = useState(false);
+
+  const [selectedFeed, setSelectedFeed] = useState<any>(null);
+  const [detailVisible, setDetailVisible] = useState(false);
+  const [messageVisible, setMessageVisible] = useState(false);
+  const [messageText, setMessageText] = useState("");
+  const [sendingMessage, setSendingMessage] = useState(false);
 
   const [sheetVisible, setSheetVisible] = useState(false);
   const sheetAnim = React.useRef(new Animated.Value(0)).current;
@@ -359,6 +369,39 @@ const TradingFeed = () => {
     return url.replace("http://localhost:8000", CONFIG.API_ENDPOINT);
   };
 
+  const getUrl = (path: string) => {
+    const base = CONFIG.API_ENDPOINT.endsWith("/")
+      ? CONFIG.API_ENDPOINT.slice(0, -1)
+      : CONFIG.API_ENDPOINT;
+    const cleanPath = path.startsWith("/") ? path : `/${path}`;
+    return `${base}${cleanPath}`;
+  };
+
+  const buildDefaultMessage = (item: any) => {
+    const name = item?.product?.name || "your product";
+    return `Hi, I am interested in your product: ${name}. Can I get more details?`;
+  };
+
+  const openDetail = (item: any) => {
+    setSelectedFeed(item);
+    setDetailVisible(true);
+  };
+
+  const closeDetail = () => {
+    setDetailVisible(false);
+    setMessageVisible(false);
+  };
+
+  const openMessage = () => {
+    if (!selectedFeed) return;
+    setMessageText(buildDefaultMessage(selectedFeed));
+    setMessageVisible(true);
+  };
+
+  const closeMessage = () => {
+    setMessageVisible(false);
+  };
+
   const formatType = (value?: string) => {
     if (!value) return "Offer";
     return value.toLowerCase() === "wtb" ? "Request" : "Offer";
@@ -398,6 +441,134 @@ const TradingFeed = () => {
       return "";
     }
   };
+
+  const findExistingChatId = useCallback(async (token: string, memberId: number) => {
+    let offsetValue = 0;
+    const limit = 50;
+
+    while (offsetValue < 200) {
+      const response = await fetch(getUrl("/api/gsmfeed-chat/get-chats"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ offset: offsetValue, limit }),
+      });
+
+      if (!response.ok) return null;
+      const json = await response.json();
+      if (!json.status || !Array.isArray(json.data)) return null;
+
+      const match = json.data.find((chat: any) =>
+        chat?.members?.some((member: any) => Number(member?.id) === memberId),
+      );
+      if (match?.id) return match.id;
+
+      if (json.data.length < limit) break;
+      offsetValue += limit;
+    }
+
+    return null;
+  }, []);
+
+  const handleSendMessage = useCallback(async () => {
+    const targetUserId = selectedFeed?.user?.id;
+    if (!targetUserId) {
+      Alert.alert("Unavailable", "Contact information is not available.");
+      return;
+    }
+
+    const content = messageText.trim();
+    if (!content) return;
+
+    setSendingMessage(true);
+    try {
+      const userString = await AsyncStorage.getItem("user");
+      if (!userString) {
+        Alert.alert("Error", "User session not found.");
+        return;
+      }
+      const user = JSON.parse(userString);
+      const memberId = Number(targetUserId);
+      const chatId = await findExistingChatId(user.token, memberId);
+      const chatName =
+        selectedFeed?.user?.name ||
+        selectedFeed?.user?.username ||
+        "Chat";
+
+      if (chatId) {
+        const response = await fetch(getUrl("/api/gsmfeed-chat/new-message"), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${user.token}`,
+          },
+          body: JSON.stringify({
+            chat_id: chatId,
+            content,
+            type: "text",
+          }),
+        });
+        const json = await response.json();
+        if (!response.ok || !json.status) {
+          Alert.alert("Failed", json.message || "Could not send message.");
+          return;
+        }
+
+        setMessageVisible(false);
+        setDetailVisible(false);
+        router.push({
+          pathname: "/screens/MessageBubble",
+          params: { chatId: String(chatId), chatName },
+        });
+        return;
+      }
+
+      const response = await fetch(getUrl("/api/gsmfeed-chat/create"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${user.token}`,
+        },
+        body: JSON.stringify({
+          members: [memberId],
+          message: content,
+        }),
+      });
+      const responseText = await response.text();
+      if (!response.ok) {
+        Alert.alert("Failed", `Server returned ${response.status}.`);
+        return;
+      }
+      const json = JSON.parse(responseText);
+      if (!json.status) {
+        Alert.alert("Failed", json.message || "Could not create chat.");
+        return;
+      }
+      const createdChatId =
+        json.data?.chat_id ?? json.data?.chat?.id ?? json.data?.id;
+      if (!createdChatId) {
+        Alert.alert("Failed", "Chat ID not found in response.");
+        return;
+      }
+
+      setMessageVisible(false);
+      setDetailVisible(false);
+      router.push({
+        pathname: "/screens/MessageBubble",
+        params: {
+          chatId: String(createdChatId),
+          chatName,
+          initialMessage: content,
+        },
+      });
+    } catch (error) {
+      Alert.alert("Network Error", "Please check your connection.");
+    } finally {
+      setSendingMessage(false);
+    }
+  }, [findExistingChatId, messageText, router, selectedFeed]);
 
   const fetchFeeds = useCallback(
     async (nextOffset: number, isRefresh = false) => {
@@ -548,11 +719,13 @@ const TradingFeed = () => {
     ].filter(Boolean);
 
     return (
-      <View
+      <TouchableOpacity
         style={[
           styles.card,
           { backgroundColor: theme.card, borderColor: theme.border },
         ]}
+        activeOpacity={0.9}
+        onPress={() => openDetail(item)}
       >
         <View style={styles.cardHeader}>
           <View style={[styles.typeBadge, { backgroundColor: typeColors.bg }]}>
@@ -658,9 +831,44 @@ const TradingFeed = () => {
             </Text>
           </View>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
+
+  const activeFeed = selectedFeed;
+  const activeUser = selectedFeed?.user;
+  const detailTypeLabel = activeFeed ? formatType(activeFeed?.type) : "";
+  const detailTypeColors =
+    detailTypeLabel === "Request"
+      ? { bg: "#E8F5E9", text: "#2E7D32" }
+      : { bg: "#EEF2FF", text: "#3730A3" };
+  const detailImage = resolveUrl(
+    activeFeed?.images?.[0] || activeFeed?.product?.image,
+  );
+  const detailPrice = activeFeed
+    ? formatPrice(activeFeed?.price, activeFeed?.currency)
+    : "";
+  const detailCondition = formatCondition(activeFeed?.condition);
+  const detailQty =
+    activeFeed?.qty === null || activeFeed?.qty === undefined
+      ? "N/A"
+      : String(activeFeed?.qty);
+  const detailSpecs = activeFeed?.spec?.name || "N/A";
+  const detailStorage = activeFeed?.storage?.name || "N/A";
+  const detailGrade = activeFeed?.grade?.name || "N/A";
+  const detailColor = activeFeed?.color?.name || "N/A";
+  const detailExtras = activeFeed?.extra_details || [];
+  const contactName =
+    activeUser?.name || activeUser?.username || "Unknown";
+  const contactCompany = activeUser?.companyName || "N/A";
+  const contactEmail = activeUser?.email || "N/A";
+  const contactPhone = activeUser?.phone
+    ? `${activeUser?.phone_country_code ? `+${activeUser.phone_country_code} ` : ""}${activeUser.phone}`
+    : "N/A";
+  const contactAvatar = resolveUrl(
+    activeUser?.avatar_url || activeUser?.companyLogo,
+  );
+  const canMessage = !!activeUser?.id;
 
   const statsLabel = selectedProduct
     ? `${totalRecords || filteredFeeds.length} broadcasts found`
@@ -871,6 +1079,280 @@ const TradingFeed = () => {
           }
         />
       )}
+
+      <Modal
+        visible={detailVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeDetail}
+      >
+        <View style={styles.detailOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={closeDetail}
+          />
+          <View
+            style={[
+              styles.detailCard,
+              { backgroundColor: theme.card, borderColor: theme.border },
+            ]}
+          >
+            <ScrollView
+              contentContainerStyle={styles.detailContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.detailHeader}>
+                <View
+                  style={[
+                    styles.typeBadge,
+                    { backgroundColor: detailTypeColors.bg },
+                  ]}
+                >
+                  <Text style={[styles.typeText, { color: detailTypeColors.text }]}>
+                    {detailTypeLabel || "Offer"}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.detailCloseBtn}
+                  onPress={closeDetail}
+                >
+                  <Ionicons name="close" size={22} color={theme.text} />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={[styles.detailTitle, { color: theme.text }]}>
+                {activeFeed?.product?.name || "Product"}
+              </Text>
+              <Text style={[styles.detailSubtitle, { color: theme.subText }]}>
+                {activeFeed?.product?.brand?.name || ""}
+              </Text>
+
+              {detailImage ? (
+                <Image source={{ uri: detailImage }} style={styles.detailImage} />
+              ) : (
+                <View style={[styles.detailImage, styles.detailImagePlaceholder]}>
+                  <Ionicons name="image-outline" size={24} color={theme.subText} />
+                </View>
+              )}
+
+              <View
+                style={[
+                  styles.detailSection,
+                  { backgroundColor: theme.bg, borderColor: theme.border },
+                ]}
+              >
+                <Text style={[styles.detailSectionTitle, { color: theme.text }]}>Overview</Text>
+                <View style={styles.detailInfoGrid}>
+                {[
+                  { label: "Condition", value: detailCondition },
+                  { label: "Qty", value: detailQty },
+                  { label: "Specs", value: detailSpecs },
+                  { label: "Storage", value: detailStorage },
+                  { label: "Grade", value: detailGrade },
+                  { label: "Color", value: detailColor },
+                ].map((info) => (
+                  <View key={info.label} style={styles.detailItem}>
+                    <Text style={[styles.detailItemLabel, { color: theme.subText }]}>
+                      {info.label}
+                    </Text>
+                    <Text style={[styles.detailItemValue, { color: theme.text }]}>
+                      {info.value}
+                    </Text>
+                  </View>
+                ))}
+                </View>
+              </View>
+
+              {detailExtras.length > 0 ? (
+                <View
+                  style={[
+                    styles.detailSection,
+                    { backgroundColor: theme.bg, borderColor: theme.border },
+                  ]}
+                >
+                  <Text style={[styles.detailSectionTitle, { color: theme.text }]}>
+                    Details
+                  </Text>
+                  {detailExtras.map((extra: any, index: number) => (
+                    <View key={`extra-${index}`} style={styles.detailExtraRow}>
+                      <Text style={[styles.detailExtraLabel, { color: theme.subText }]}>
+                        {extra?.name || ""}
+                      </Text>
+                      <Text style={[styles.detailExtraValue, { color: theme.text }]}>
+                        {String(extra?.value ?? "") || "-"}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+
+              <View style={styles.detailActionRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.sendMessageBtn,
+                    {
+                      backgroundColor: canMessage ? theme.primary : theme.border,
+                    },
+                  ]}
+                  onPress={openMessage}
+                  disabled={!canMessage}
+                >
+                  <Text
+                    style={[
+                      styles.sendMessageText,
+                      { color: canMessage ? "#FFFFFF" : theme.subText },
+                    ]}
+                  >
+                    Send Message
+                  </Text>
+                </TouchableOpacity>
+                <View
+                  style={[
+                    styles.detailPricePill,
+                    { borderColor: theme.border, backgroundColor: theme.bg },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.detailPrice,
+                      {
+                        color:
+                          detailPrice === "Negotiable" ? theme.subText : "#16A34A",
+                      },
+                    ]}
+                  >
+                    {detailPrice || "Negotiable"}
+                  </Text>
+                </View>
+              </View>
+
+              <View
+                style={[
+                  styles.detailDivider,
+                  { backgroundColor: theme.border },
+                ]}
+              />
+
+              <View
+                style={[
+                  styles.detailSection,
+                  { backgroundColor: theme.bg, borderColor: theme.border },
+                ]}
+              >
+                <Text style={[styles.detailSectionTitle, { color: theme.text }]}>Contact</Text>
+                <View style={styles.contactRow}>
+                {contactAvatar ? (
+                  <Image source={{ uri: contactAvatar }} style={styles.contactAvatar} />
+                ) : (
+                  <View
+                    style={[
+                      styles.contactAvatar,
+                      styles.contactAvatarPlaceholder,
+                    ]}
+                  >
+                    <Ionicons name="person" size={24} color={theme.subText} />
+                  </View>
+                )}
+                <View style={styles.contactInfo}>
+                  <Text style={[styles.contactLabel, { color: theme.subText }]}>
+                    Contact Person
+                  </Text>
+                  <Text style={[styles.contactValue, { color: theme.text }]}>
+                    {contactName}
+                  </Text>
+                  <Text style={[styles.contactLabel, { color: theme.subText }]}>
+                    Mobile
+                  </Text>
+                  <Text style={[styles.contactValue, { color: theme.text }]}>
+                    {contactPhone}
+                  </Text>
+                  <Text style={[styles.contactLabel, { color: theme.subText }]}>
+                    Email
+                  </Text>
+                  <Text style={[styles.contactValue, { color: theme.text }]}>
+                    {contactEmail}
+                  </Text>
+                  <Text style={[styles.contactLabel, { color: theme.subText }]}>
+                    Company
+                  </Text>
+                  <Text style={[styles.contactValue, { color: theme.text }]}>
+                    {contactCompany}
+                  </Text>
+                </View>
+                </View>
+              </View>
+            </ScrollView>
+
+            {messageVisible ? (
+              <View style={styles.messageLayer}>
+                <TouchableOpacity
+                  style={StyleSheet.absoluteFill}
+                  activeOpacity={1}
+                  onPress={closeMessage}
+                />
+                <KeyboardAvoidingView
+                  behavior={Platform.OS === "ios" ? "padding" : undefined}
+                >
+                  <View
+                    style={[
+                      styles.messageCard,
+                      { backgroundColor: theme.card, borderColor: theme.border },
+                    ]}
+                  >
+                    <View style={styles.messageHeader}>
+                      <Text style={[styles.messageTitle, { color: theme.text }]}>
+                        Send Message
+                      </Text>
+                      <TouchableOpacity onPress={closeMessage}>
+                        <Ionicons name="close" size={22} color={theme.text} />
+                      </TouchableOpacity>
+                    </View>
+                    <TextInput
+                      value={messageText}
+                      onChangeText={setMessageText}
+                      placeholder="Write a message..."
+                      placeholderTextColor={theme.subText}
+                      style={[
+                        styles.messageInput,
+                        { color: theme.text, borderColor: theme.border },
+                      ]}
+                      multiline
+                      maxLength={300}
+                    />
+                    <View style={styles.messageFooter}>
+                      <Text style={[styles.messageCount, { color: theme.subText }]}>
+                        {messageText.length}/300
+                      </Text>
+                      <TouchableOpacity
+                        style={[
+                          styles.messageSendBtn,
+                          {
+                            backgroundColor: theme.primary,
+                            opacity:
+                              sendingMessage || !messageText.trim() ? 0.6 : 1,
+                          },
+                        ]}
+                        onPress={handleSendMessage}
+                        disabled={sendingMessage || !messageText.trim()}
+                      >
+                        {sendingMessage ? (
+                          <ActivityIndicator color="#FFFFFF" />
+                        ) : (
+                          <Text style={styles.messageSendText}>Send</Text>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </KeyboardAvoidingView>
+              </View>
+            ) : null}
+          </View>
+        </View>
+      </Modal>
+
+
+
 
 
       <Modal
@@ -1406,6 +1888,154 @@ const styles = StyleSheet.create({
   },
   infoLabel: { fontSize: 11, fontWeight: "600" },
   infoValue: { fontSize: 13, marginTop: 2, fontWeight: "600" },
+  detailOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.35)",
+    justifyContent: "center",
+    padding: 16,
+  },
+  detailCard: {
+    borderRadius: 24,
+    borderWidth: 1,
+    maxHeight: "90%",
+    overflow: "hidden",
+    position: "relative",
+  },
+  detailContent: {
+    padding: 16,
+    paddingBottom: 24,
+    gap: 14,
+  },
+  detailHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  detailCloseBtn: { padding: 4 },
+  detailSubtitle: { fontSize: 13, fontWeight: "600" },
+  detailTitle: { fontSize: 22, fontWeight: "800" },
+  detailImage: {
+    width: "100%",
+    height: 200,
+    borderRadius: 16,
+    backgroundColor: "#E2E8F0",
+  },
+  detailImagePlaceholder: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  detailSection: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 12,
+    gap: 10,
+  },
+  detailInfoGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  detailItem: { width: "48%" },
+  detailItemLabel: { fontSize: 12, fontWeight: "600" },
+  detailItemValue: { fontSize: 14, fontWeight: "700", marginTop: 2 },
+  detailExtras: { gap: 8 },
+  detailSectionTitle: { fontSize: 14, fontWeight: "700" },
+  detailExtraRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  detailExtraLabel: { fontSize: 12, fontWeight: "600" },
+  detailExtraValue: { fontSize: 13, fontWeight: "700" },
+  detailPricePill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  detailActionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  sendMessageBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    borderRadius: 999,
+    alignItems: "center",
+  },
+  sendMessageText: { fontSize: 15, fontWeight: "700" },
+  detailPrice: { fontSize: 16, fontWeight: "800" },
+  detailDivider: {
+    height: StyleSheet.hairlineWidth,
+    width: "100%",
+  },
+  contactRow: {
+    flexDirection: "row",
+    gap: 14,
+    alignItems: "flex-start",
+  },
+  contactAvatar: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: "#E2E8F0",
+  },
+  contactAvatarPlaceholder: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  contactInfo: { flex: 1 },
+  contactLabel: { fontSize: 12, fontWeight: "600", marginTop: 8 },
+  contactValue: { fontSize: 14, fontWeight: "700" },
+  messageLayer: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(15, 23, 42, 0.18)",
+    justifyContent: "center",
+    padding: 16,
+    zIndex: 10,
+  },
+  messageCard: {
+    borderRadius: 20,
+    padding: 16,
+    width: "100%",
+    maxWidth: 520,
+    alignSelf: "center",
+    elevation: 8,
+    shadowColor: "#000",
+    shadowOpacity: 0.16,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+  },
+  messageHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  messageTitle: { fontSize: 18, fontWeight: "700" },
+  messageInput: {
+    minHeight: 160,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    textAlignVertical: "top",
+  },
+  messageFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 12,
+  },
+  messageCount: { fontSize: 12, fontWeight: "600" },
+  messageSendBtn: {
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 999,
+  },
+  messageSendText: { color: "#FFFFFF", fontWeight: "700", fontSize: 15 },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(15, 23, 42, 0.35)",

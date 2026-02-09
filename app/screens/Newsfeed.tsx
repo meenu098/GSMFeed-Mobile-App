@@ -1073,7 +1073,7 @@ const PostItem = ({ item, theme, onSave }: any) => {
           setActiveCommentPickerId(null);
         }}
       >
-        <SafeAreaView style={styles.commentModalOverlay}>
+        <SafeAreaView style={styles.commentModalOverlay} edges={["top", "left", "right"]}>
           <LinearGradient
             colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.25)", "rgba(0,0,0,0.4)"]}
             locations={[0, 0.2, 1]}
