@@ -114,7 +114,7 @@ export default function NewChatScreen() {
       if (!userString) throw new Error("User session not found");
       const user = JSON.parse(userString);
 
-      const url = getUrl("/api/chat/new");
+      const url = getUrl("/api/gsmfeed-chat/create");
 
       const response = await fetch(url, {
         method: "POST",
@@ -123,9 +123,8 @@ export default function NewChatScreen() {
           Authorization: `Bearer ${user.token}`,
         },
         body: JSON.stringify({
-          receiver_id: selectedUser.id,
-          content: message,
-          type: "text",
+          members: [Number(selectedUser.id)],
+          message: message.trim(),
         }),
       });
 
@@ -143,9 +142,19 @@ export default function NewChatScreen() {
 
       const json = JSON.parse(responseText);
       if (json.status) {
+        const createdChatId =
+          json.data?.chat_id ?? json.data?.chat?.id ?? json.data?.id;
+        if (!createdChatId) {
+          Alert.alert("Failed", "Chat ID not found in response.");
+          return;
+        }
         router.replace({
           pathname: "/screens/MessageBubble",
-          params: { chatId: json.data.chat_id, chatName: selectedUser.name },
+          params: {
+            chatId: String(createdChatId),
+            chatName: selectedUser.name,
+            initialMessage: message.trim(),
+          },
         });
       } else {
         Alert.alert("Failed", json.message || "Could not start chat.");

@@ -10,7 +10,7 @@ export const getFeed = (page: number) =>
   api.get<FeedResponse>(`/api/feed/posts?page=${page}`);
 
 export const recordInteraction = (postId: string | number) =>
-  api.post<FeedResponse>("/api/feed/post/stat/record-interaction", {
+  api.post<FeedResponse>("/api/stats/post/post-interact", {
     post_id: postId,
   });
 

@@ -59,7 +59,7 @@ export default function IndividualChatScreen() {
   const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { chatId, chatName } = useLocalSearchParams();
+  const { chatId, chatName, initialMessage } = useLocalSearchParams();
   const [messages, setMessages] = useState<any[]>([]);
   const [inputText, setInputText] = useState("");
   const [loading, setLoading] = useState(true);
@@ -74,6 +74,21 @@ export default function IndividualChatScreen() {
     border: isDark ? "#1B2331" : "#E2E8F0",
     primary: "#3B66F5",
   };
+
+  const initialMessageText =
+    typeof initialMessage === "string"
+      ? initialMessage
+      : Array.isArray(initialMessage)
+        ? initialMessage[0] || ""
+        : "";
+
+  const normalizeMessage = useCallback(
+    (msg: any) => ({
+      ...msg,
+      content: msg?.content ?? msg?.message ?? "",
+    }),
+    [],
+  );
 
   const markAsRead = async (token: string) => {
     try {
@@ -110,14 +125,27 @@ export default function IndividualChatScreen() {
 
       const json = await response.json();
       if (json.status) {
-        setMessages(json.data.messages.reverse());
+        const rawMessages = json.data?.messages || [];
+        const normalized = rawMessages.map(normalizeMessage);
+        if (normalized.length > 0) {
+          setMessages(normalized.reverse());
+        } else if (initialMessageText.trim()) {
+          setMessages([
+            {
+              id: `temp-${Date.now()}`,
+              content: initialMessageText.trim(),
+              sender_id: user.id,
+              sent_at: new Date().toISOString(),
+            },
+          ]);
+        }
         markAsRead(user.token); // Trigger mark as read
       }
     } catch (error) {
     } finally {
       setLoading(false);
     }
-  }, [chatId]);
+  }, [chatId, initialMessageText, normalizeMessage]);
 
   useEffect(() => {
     fetchMessages();
@@ -147,7 +175,10 @@ export default function IndividualChatScreen() {
         },
       );
       const json = await response.json();
-      if (json.status) setMessages((prev) => [...prev, json.data]);
+      if (json.status) {
+        const nextMessage = normalizeMessage(json.data);
+        setMessages((prev) => [...prev, nextMessage]);
+      }
     } catch (e) {
     }
   };
