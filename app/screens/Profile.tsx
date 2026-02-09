@@ -171,11 +171,28 @@ const CommentItem = ({
     const num = Number(value);
     return Number.isFinite(num) ? num : 0;
   };
+  const getDominantReaction = (value: any) => {
+    if (!value || typeof value !== "object") return null;
+    let topType: string | null = null;
+    let topCount = 0;
+    REACTION_TYPES.forEach((reaction) => {
+      const count = normalizeCount(value?.[reaction.title]);
+      if (count > topCount) {
+        topCount = count;
+        topType = reaction.title;
+      }
+    });
+    return topType;
+  };
   const totalReactionsRaw = comment?.total_reactions;
   const totalReactionsCount =
     totalReactionsRaw && typeof totalReactionsRaw === "object"
       ? normalizeCount(totalReactionsRaw.total)
       : normalizeCount(totalReactionsRaw);
+  const dominantReaction =
+    activeReaction || getDominantReaction(totalReactionsRaw);
+  const ReactionChipIcon =
+    REACTION_TYPES.find((r) => r.title === dominantReaction)?.Icon || LikeIcon;
 
   const renderCommentText = () => {
     const parts = content.split(/(@[\w._-]+)/g);
@@ -248,7 +265,7 @@ const CommentItem = ({
                   },
                 ]}
               >
-                <ActiveReactionIcon width={12} height={12} />
+                <ReactionChipIcon width={12} height={12} />
                 <Text
                   style={[styles.commentReactionText, { color: theme.text }]}
                 >
