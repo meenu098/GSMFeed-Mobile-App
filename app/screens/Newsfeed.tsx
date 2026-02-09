@@ -5,6 +5,8 @@ import {
   MaterialCommunityIcons,
 } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useEventListener } from "expo";
+import { useVideoPlayer, VideoSource, VideoView } from "expo-video";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
@@ -54,6 +56,93 @@ const REACTION_TYPES = [
   { title: "wow", Icon: WowIcon, color: "#FBBF24" },
   { title: "sad", Icon: SadIcon, color: "#FBBF24" },
   { title: "angry", Icon: AngryIcon, color: "#EA580C" },
+];
+
+type AdItem = {
+  id: number;
+  src: VideoSource;
+  srcMobile?: VideoSource;
+  link: string;
+};
+
+const ADS_ITEMS: AdItem[] = [
+  {
+    id: 10,
+    src: require("../../assets/ads/coolmix.mp4"),
+    srcMobile: require("../../assets/ads/coolmix-mobile.mp4"),
+    link:
+      "https://api.whatsapp.com/send?phone=971555177420&text=Hi, I found your details on gsmfeed.com and would like to learn more about your company's services.",
+  },
+  {
+    id: 11,
+    src: require("../../assets/ads/blessings.mp4"),
+    srcMobile: require("../../assets/ads/blessings-mobile.mp4"),
+    link:
+      "https://api.whatsapp.com/send?phone=971555177420&text=Hi, I found your details on gsmfeed.com and would like to learn more about your company's services.",
+  },
+  {
+    id: 7,
+    src: require("../../assets/ads/mobiking.mp4"),
+    srcMobile: require("../../assets/ads/mobiking-mobile.mp4"),
+    link:
+      "https://api.whatsapp.com/send?phone=971555177420&text=Hi, I found your details on gsmfeed.com and would like to learn more about your company's services.",
+  },
+  {
+    id: 1,
+    src: require("../../assets/ads/universal.mp4"),
+    srcMobile: require("../../assets/ads/universal-mobile.mp4"),
+    link:
+      "https://api.whatsapp.com/send?phone=971553304244&text=Hi, I found your details on gsmfeed.com and would like to learn more about your company's services.",
+  },
+  {
+    id: 2,
+    src: require("../../assets/ads/equals.mp4"),
+    srcMobile: require("../../assets/ads/equals-mobile.mp4"),
+    link:
+      "https://api.whatsapp.com/send?phone=447554569233&text=Hi, I found your details on gsmfeed.com and would like to learn more about your company's services.",
+  },
+  {
+    id: 3,
+    src: require("../../assets/ads/usedtrading.mp4"),
+    srcMobile: require("../../assets/ads/usedtrading-mobile.mp4"),
+    link:
+      "https://api.whatsapp.com/send?phone=31636453528&text=Hi, I found your details on gsmfeed.com and would like to learn more about your company's services.",
+  },
+  {
+    id: 4,
+    src: require("../../assets/ads/onerepair.mp4"),
+    srcMobile: require("../../assets/ads/onerepair-mobile.mp4"),
+    link:
+      "https://api.whatsapp.com/send?phone=351918332588&text=Hi, I found your details on gsmfeed.com and would like to learn more about your company's services.",
+  },
+  {
+    id: 5,
+    src: require("../../assets/ads/remobile.mp4"),
+    srcMobile: require("../../assets/ads/remobile-mobile.mp4"),
+    link:
+      "https://api.whatsapp.com/send?phone=971509277746&text=Hi, I found your details on gsmfeed.com and would like to learn more about your company's services.",
+  },
+  {
+    id: 6,
+    src: require("../../assets/ads/wecell.mp4"),
+    srcMobile: require("../../assets/ads/wecell-mobile.mp4"),
+    link:
+      "https://api.whatsapp.com/send?phone=31642638686&text=Hi, I found your details on gsmfeed.com and would like to learn more about your company's services.",
+  },
+  {
+    id: 8,
+    src: require("../../assets/ads/eurospares.mp4"),
+    srcMobile: require("../../assets/ads/eurospares-mobile.mp4"),
+    link:
+      "https://api.whatsapp.com/send?phone=31641876946&text=Hi, I found your details on gsmfeed.com and would like to learn more about your company's services.",
+  },
+  {
+    id: 9,
+    src: require("../../assets/ads/phonetronics.mp4"),
+    srcMobile: require("../../assets/ads/phonetronics-mobile.mp4"),
+    link:
+      "https://api.whatsapp.com/send?phone=33650081718&text=Hi, I found your details on gsmfeed.com and would like to learn more about your company's services.",
+  },
 ];
 
 const stripHtml = (value: string) => {
@@ -121,6 +210,49 @@ const SpecItem = ({ label, value }: { label: string; value: any }) => (
     </Text>
   </View>
 );
+
+const AdsCarousel = ({
+  ad,
+  theme,
+  onPress,
+  onFinished,
+}: {
+  ad: AdItem | null;
+  theme: any;
+  onPress: (url: string) => void;
+  onFinished: () => void;
+}) => {
+  const source = ad?.srcMobile ?? ad?.src ?? null;
+  const player = useVideoPlayer(source, (player) => {
+    player.muted = true;
+    player.loop = false;
+    player.play();
+  });
+
+  useEventListener(player, "playToEnd", () => {
+    if (!ad) return;
+    onFinished();
+  });
+
+  if (!ad) return null;
+
+  return (
+    <View style={[styles.adCard, { backgroundColor: theme.cardBg }]}>
+      <TouchableOpacity activeOpacity={0.9} onPress={() => onPress(ad.link)}>
+        <VideoView
+          key={`ad-video-${ad.id}`}
+          player={player}
+          style={styles.adVideo}
+          contentFit="cover"
+          nativeControls={false}
+          fullscreenOptions={{ enable: false }}
+          allowsPictureInPicture={false}
+        />
+      </TouchableOpacity>
+    </View>
+  );
+};
+
 
 const CommentItem = ({
   comment,
@@ -941,7 +1073,13 @@ const PostItem = ({ item, theme, onSave }: any) => {
           setActiveCommentPickerId(null);
         }}
       >
-        <View style={styles.commentModalOverlay}>
+        <SafeAreaView style={styles.commentModalOverlay}>
+          <LinearGradient
+            colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.25)", "rgba(0,0,0,0.4)"]}
+            locations={[0, 0.2, 1]}
+            style={styles.commentBackdrop}
+            pointerEvents="none"
+          />
           <View style={[styles.commentModal, { backgroundColor: theme.cardBg }]}>
             <View style={styles.commentHeader}>
               <Text style={[styles.commentTitle, { color: theme.text }]}>
@@ -1047,7 +1185,7 @@ const PostItem = ({ item, theme, onSave }: any) => {
               </View>
             </KeyboardAvoidingView>
           </View>
-        </View>
+        </SafeAreaView>
       </Modal>
 
       <Modal
@@ -1130,6 +1268,7 @@ const PostItem = ({ item, theme, onSave }: any) => {
 export default function NewsFeedScreen() {
   const { isDark } = useTheme();
   const [sidebarVisible, setSidebarVisible] = useState(false);
+  const [adIndex, setAdIndex] = useState(0);
   const { feed, isLoading, fetchFeed } = useFeedData(
     `${CONFIG.API_ENDPOINT}/api/feed/posts`,
   );
@@ -1158,6 +1297,22 @@ export default function NewsFeedScreen() {
         method: "POST",
         headers: { Authorization: `Bearer ${user.token}` },
       });
+    } catch (error) {}
+  }, []);
+
+  const activeAd = ADS_ITEMS.length
+    ? ADS_ITEMS[adIndex % ADS_ITEMS.length]
+    : null;
+
+  const handleAdFinished = useCallback(() => {
+    if (ADS_ITEMS.length === 0) return;
+    setAdIndex((prev) => (prev + 1) % ADS_ITEMS.length);
+  }, []);
+
+  const handleAdPress = useCallback(async (url: string) => {
+    if (!url) return;
+    try {
+      await Linking.openURL(url);
     } catch (error) {}
   }, []);
 
@@ -1208,8 +1363,19 @@ export default function NewsFeedScreen() {
             </LinearGradient>
           </TouchableOpacity>
         }
-        renderItem={({ item }) => (
-          <PostItem item={item} theme={theme} onSave={handleBookmark} />
+        renderItem={({ item, index }) => (
+          <View>
+            <PostItem item={item} theme={theme} onSave={handleBookmark} />
+            {index === 0 ? (
+              <AdsCarousel
+                key={activeAd?.id ?? "ad"}
+                ad={activeAd}
+                theme={theme}
+                onPress={handleAdPress}
+                onFinished={handleAdFinished}
+              />
+            ) : null}
+          </View>
         )}
         ListFooterComponent={<View style={{ height: 100 }} />}
       />
@@ -1260,6 +1426,18 @@ const styles = StyleSheet.create({
     padding: 15,
     elevation: 3,
     position: "relative",
+  },
+  adCard: {
+    marginHorizontal: 15,
+    marginBottom: 10,
+    borderRadius: 16,
+    overflow: "hidden",
+    elevation: 3,
+  },
+  adVideo: {
+    width: "100%",
+    height: 200,
+    backgroundColor: "#000",
   },
   postHeader: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
   profileTapArea: {
@@ -1356,14 +1534,16 @@ const styles = StyleSheet.create({
   pickerOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 998 },
   commentModalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
     justifyContent: "flex-end",
   },
+  commentBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
   commentModal: {
+    height: "90%",
+    padding: 16,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    padding: 16,
-    maxHeight: "80%",
   },
   shareModalOverlay: {
     flex: 1,
@@ -1419,7 +1599,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   commentTitle: { fontSize: 16, fontWeight: "700" },
-  commentList: { maxHeight: 360, flexGrow: 0 },
+  commentList: { flex: 1 },
   commentLoading: { paddingVertical: 20, alignItems: "center" },
   commentEmptyText: { textAlign: "center", paddingVertical: 20 },
   commentItem: {

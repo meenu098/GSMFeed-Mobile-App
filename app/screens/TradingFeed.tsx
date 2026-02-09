@@ -1,157 +1,1248 @@
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import React, { useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { formatDistanceToNow, parseISO } from "date-fns";
+import { countries } from "countries-list";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
+  Animated,
+  Easing,
   FlatList,
+  Image,
+  LayoutAnimation,
+  Modal,
+  Platform,
+  RefreshControl,
   SafeAreaView,
+  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
+  UIManager,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import BottomNav from "../../components/BottomNav";
+import CONFIG from "../../shared/config";
 import { useTheme } from "../../shared/themeContext";
+
+const LIMIT = 30;
+
+type PickerType =
+  | "country"
+  | "category"
+  | "brand"
+  | "grade"
+  | "color"
+  | "spec"
+  | "storage";
 
 const TradingFeed = () => {
   const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const [search, setSearch] = useState("");
+  const [feeds, setFeeds] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [sortBy, setSortBy] = useState("dateDesc");
+  const [sortOpen, setSortOpen] = useState(false);
 
-  // Placeholder data - replace with your API fetch logic
-  const broadcasts = [
-    {
-      id: "1",
-      type: "Request",
-      brand: "Apple",
-      title: "iPhone 17",
-      color: "#e8f5e9",
-      textColor: "#2e7d32",
-    },
-    {
-      id: "2",
-      type: "Offer",
-      brand: "Apple",
-      title: "iPhone 15 Pro Max",
-      color: "#eef2ff",
-      textColor: "#3730a3",
-    },
-    {
-      id: "3",
-      type: "Offer",
-      brand: "Apple",
-      title: "iPhone 14",
-      color: "#eef2ff",
-      textColor: "#3730a3",
-    },
-    // ... add more from your API
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [filters, setFilters] = useState({
+    country: null,
+    category: null,
+    type: null,
+    condition: null,
+    brand: null,
+    grade: null,
+    color: null,
+    spec: null,
+    storage: null,
+  });
+  const [activePicker, setActivePicker] = useState<PickerType | null>(null);
+  const [pickerSearch, setPickerSearch] = useState("");
+  const [pickerOptions, setPickerOptions] = useState<any[]>([]);
+  const [pickerLoading, setPickerLoading] = useState(false);
+
+  const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [productOptions, setProductOptions] = useState<any[]>([]);
+  const [productLoading, setProductLoading] = useState(false);
+  const [productOpen, setProductOpen] = useState(false);
+
+  const [sheetVisible, setSheetVisible] = useState(false);
+  const sheetAnim = React.useRef(new Animated.Value(0)).current;
+
+  const sortOptions = [
+    { label: "Newest First", value: "dateDesc" },
+    { label: "Oldest First", value: "dateAsc" },
+    { label: "Price: High to Low", value: "priceDesc" },
+    { label: "Price: Low to High", value: "priceAsc" },
   ];
+  const activeSortLabel =
+    sortOptions.find((option) => option.value === sortBy)?.label ||
+    "Newest First";
 
-  const renderItem = ({ item }: any) => (
-    <View style={styles.row}>
-      <View style={styles.columnType}>
-        <View style={[styles.badge, { backgroundColor: item.color }]}>
-          <Text style={[styles.badgeText, { color: item.textColor }]}>
-            {item.type}
-          </Text>
-        </View>
-      </View>
-      <Text style={[styles.columnBrand, { color: isDark ? "#fff" : "#333" }]}>
-        {item.brand}
-      </Text>
-      <Text
-        style={[styles.columnTitle, { color: isDark ? "#fff" : "#333" }]}
-        numberOfLines={1}
-      >
-        {item.title}
-      </Text>
-    </View>
+  const countryOptions = useMemo(() => {
+    return Object.entries(countries)
+      .map(([code, data]) => ({ code, name: data.name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, []);
+
+  const pickerTitles: Record<PickerType, string> = {
+    country: "Country",
+    category: "Category",
+    brand: "Brand",
+    grade: "Grade",
+    color: "Color",
+    spec: "Specification",
+    storage: "Storage",
+  };
+  const activePickerTitle = activePicker ? pickerTitles[activePicker] : "";
+
+  const isPickerView = !!activePicker;
+  const sheetTitle = isPickerView ? activePickerTitle : "Filter";
+
+  const closeSheet = () => {
+    setFilterOpen(false);
+    closePicker();
+  };
+
+  const backdropOpacity = sheetAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+  });
+  const sheetTranslateY = sheetAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [60, 0],
+  });
+
+  const openPicker = (type: PickerType) => {
+    setFilterOpen(true);
+    setActivePicker(type);
+    setPickerSearch("");
+    setPickerOptions([]);
+    setSortOpen(false);
+    setProductOpen(false);
+  };
+
+  const closePicker = () => {
+    setActivePicker(null);
+    setPickerSearch("");
+    setPickerOptions([]);
+    setPickerLoading(false);
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      country: null,
+      category: null,
+      type: null,
+      condition: null,
+      brand: null,
+      grade: null,
+      color: null,
+      spec: null,
+      storage: null,
+    });
+  };
+
+  const toggleType = (value: "wts" | "wtb") => {
+    setFilters((prev: any) => ({
+      ...prev,
+      type: prev.type === value ? null : value,
+    }));
+  };
+
+  const toggleCondition = (value: "new" | "used") => {
+    setFilters((prev: any) => ({
+      ...prev,
+      condition: prev.condition === value ? null : value,
+    }));
+  };
+
+  const flattenCategories = (nodes: any[], prefix = "") => {
+    const items: any[] = [];
+    nodes.forEach((node) => {
+      const label = prefix ? `${prefix} / ${node.name}` : node.name;
+      items.push({ id: node.id, name: node.name, label });
+      if (node.children && node.children.length) {
+        items.push(...flattenCategories(node.children, label));
+      }
+    });
+    return items;
+  };
+
+  useEffect(() => {
+    if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+      UIManager.setLayoutAnimationEnabledExperimental(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+  }, [activePicker]);
+
+  useEffect(() => {
+    if (filterOpen) {
+      setSheetVisible(true);
+      sheetAnim.stopAnimation();
+      sheetAnim.setValue(0);
+      Animated.timing(sheetAnim, {
+        toValue: 1,
+        duration: 220,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    } else if (sheetVisible) {
+      Animated.timing(sheetAnim, {
+        toValue: 0,
+        duration: 180,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (finished) setSheetVisible(false);
+      });
+    }
+  }, [filterOpen, sheetVisible, sheetAnim]);
+
+  useEffect(() => {
+    if (filterOpen) {
+      setProductOpen(false);
+    }
+  }, [filterOpen]);
+
+  useEffect(() => {
+    if (!activePicker) return;
+    if (activePicker === "country") {
+      const term = pickerSearch.trim().toLowerCase();
+      const filtered = countryOptions.filter((country) =>
+        term
+          ? country.name.toLowerCase().includes(term) ||
+            country.code.toLowerCase().includes(term)
+          : true,
+      );
+      setPickerOptions(filtered);
+      return;
+    }
+
+    let isActive = true;
+    const timeout = setTimeout(async () => {
+      try {
+        setPickerLoading(true);
+        const userString = await AsyncStorage.getItem("user");
+        if (!userString) return;
+        const user = JSON.parse(userString);
+        let endpoint = "";
+        if (activePicker === "category") {
+          endpoint = `/api/selection/categories/tree?search=${encodeURIComponent(pickerSearch)}`;
+        } else if (activePicker === "brand") {
+          endpoint = `/api/selection/brands?search=${encodeURIComponent(pickerSearch)}`;
+        } else if (activePicker === "grade") {
+          endpoint = `/api/selection/grades?search=${encodeURIComponent(pickerSearch)}`;
+        } else if (activePicker === "color") {
+          endpoint = `/api/selections/colors${pickerSearch ? `?search=${encodeURIComponent(pickerSearch)}` : ""}`;
+        } else if (activePicker === "spec") {
+          endpoint = `/api/selections/specs${pickerSearch ? `?search=${encodeURIComponent(pickerSearch)}` : ""}`;
+        } else if (activePicker === "storage") {
+          endpoint = `/api/selections/storage${pickerSearch ? `?search=${encodeURIComponent(pickerSearch)}` : ""}`;
+        }
+        if (!endpoint) return;
+        const response = await fetch(`${CONFIG.API_ENDPOINT}${endpoint}`, {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${user.token}`,
+          },
+        });
+        const json = await response.json();
+        if (!isActive) return;
+        if (activePicker === "category") {
+          const flat = flattenCategories(json.status ? json.data || [] : []);
+          setPickerOptions(flat);
+        } else {
+          setPickerOptions(json.status ? json.data || [] : []);
+        }
+      } catch (error) {
+        if (isActive) setPickerOptions([]);
+      } finally {
+        if (isActive) setPickerLoading(false);
+      }
+    }, 300);
+
+    return () => {
+      isActive = false;
+      clearTimeout(timeout);
+    };
+  }, [activePicker, pickerSearch, countryOptions]);
+
+
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    setSortOpen(false);
+    if (selectedProduct && value.trim() !== selectedProduct.name) {
+      setSelectedProduct(null);
+    }
+    if (!value.trim()) {
+      setProductOptions([]);
+      setProductOpen(false);
+    } else {
+      setProductOpen(true);
+    }
+  };
+
+  const clearSearch = () => {
+    setSearch("");
+    setSelectedProduct(null);
+    setProductOptions([]);
+    setProductOpen(false);
+  };
+
+  useEffect(() => {
+    const query = search.trim();
+    if (!query || selectedProduct) {
+      setProductLoading(false);
+      setProductOptions([]);
+      return;
+    }
+
+    let isActive = true;
+    const timeout = setTimeout(async () => {
+      try {
+        setProductLoading(true);
+        const userString = await AsyncStorage.getItem("user");
+        if (!userString) return;
+        const user = JSON.parse(userString);
+        const response = await fetch(
+          `${CONFIG.API_ENDPOINT}/api/selection/products?search=${encodeURIComponent(query)}`,
+          {
+            method: "GET",
+            headers: {
+              Accept: "application/json",
+              Authorization: `Bearer ${user.token}`,
+            },
+          },
+        );
+        const json = await response.json();
+        if (isActive) {
+          setProductOptions(json.status ? json.data || [] : []);
+        }
+      } catch (error) {
+        if (isActive) setProductOptions([]);
+      } finally {
+        if (isActive) setProductLoading(false);
+      }
+    }, 300);
+
+    return () => {
+      isActive = false;
+      clearTimeout(timeout);
+    };
+  }, [search, selectedProduct]);
+
+  const theme = {
+    bg: isDark ? "#0B0E14" : "#F8FAFC",
+    card: isDark ? "#0F172A" : "#FFFFFF",
+    text: isDark ? "#F8FAFC" : "#0F172A",
+    subText: isDark ? "#94A3B8" : "#64748B",
+    border: isDark ? "#1E293B" : "#E2E8F0",
+    primary: "#3B66F5",
+    chipBg: isDark ? "#111827" : "#F1F5F9",
+  };
+
+  const resolveUrl = (url?: string | null) => {
+    if (!url) return null;
+    return url.replace("http://localhost:8000", CONFIG.API_ENDPOINT);
+  };
+
+  const formatType = (value?: string) => {
+    if (!value) return "Offer";
+    return value.toLowerCase() === "wtb" ? "Request" : "Offer";
+  };
+
+  const formatCondition = (value?: string) => {
+    if (!value) return "N/A";
+    return value.charAt(0).toUpperCase() + value.slice(1);
+  };
+
+  const currencySymbol = (value?: string) => {
+    const code = (value || "").toLowerCase();
+    if (code === "usd") return "$";
+    if (code === "eur") return "€";
+    if (code === "gbp") return "£";
+    if (code === "aed") return "AED ";
+    return value ? value.toUpperCase() + " " : "";
+  };
+
+  const formatPrice = (price?: string | number | null, currency?: string) => {
+    if (price === null || price === undefined || price === "") {
+      return "Negotiable";
+    }
+    const symbol = currencySymbol(currency);
+    const numeric = Number(price);
+    if (Number.isFinite(numeric)) {
+      return `${symbol}${numeric.toFixed(2)}`;
+    }
+    return `${symbol}${price}`;
+  };
+
+  const formatDate = (value?: string) => {
+    if (!value) return "";
+    try {
+      return formatDistanceToNow(parseISO(value), { addSuffix: true });
+    } catch {
+      return "";
+    }
+  };
+
+  const fetchFeeds = useCallback(
+    async (nextOffset: number, isRefresh = false) => {
+      if (isRefresh) {
+        setRefreshing(true);
+      } else if (nextOffset === 0) {
+        setLoading(true);
+      }
+
+      try {
+        const userString = await AsyncStorage.getItem("user");
+        if (!userString) return;
+        const user = JSON.parse(userString);
+        const payload: any = {
+          limit: LIMIT,
+          offset: nextOffset,
+          sortBy,
+        };
+        if (selectedProduct?.id) {
+          payload.product_id = selectedProduct.id;
+        }
+
+        if (filters.country?.code) {
+          payload.country_id = filters.country.code;
+        }
+        if (filters.category?.id) {
+          payload.category_id = filters.category.id;
+        }
+        if (filters.type) {
+          payload.type = filters.type;
+        }
+        if (filters.condition) {
+          payload.condition = filters.condition;
+        }
+        if (filters.brand?.id) {
+          payload.brand_id = filters.brand.id;
+        }
+        if (filters.grade?.id) {
+          payload.grade_id = filters.grade.id;
+        }
+        if (filters.color?.id) {
+          payload.color_id = filters.color.id;
+        }
+        if (filters.spec?.id) {
+          payload.spec_id = filters.spec.id;
+        }
+        if (filters.storage?.id) {
+          payload.storage_id = filters.storage.id;
+        }
+
+        const response = await fetch(`${CONFIG.API_ENDPOINT}/api/tradingfeed`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${user.token}`,
+          },
+          body: JSON.stringify(payload),
+        });
+
+        const json = await response.json();
+        if (json.status && json.data) {
+          const records = json.data?.data || [];
+          const total = Number(json.data?.total_records || 0);
+
+          setFeeds((prev) => (isRefresh ? records : [...prev, ...records]));
+          if (total) setTotalRecords(total);
+
+          const nextHasMore = total
+            ? nextOffset + records.length < total
+            : records.length === LIMIT;
+          setHasMore(nextHasMore);
+        }
+      } catch (error) {
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [sortBy, selectedProduct?.id, filters.country?.code, filters.category?.id, filters.type, filters.condition, filters.brand?.id, filters.grade?.id, filters.color?.id, filters.spec?.id, filters.storage?.id],
   );
 
-  return (
-    <SafeAreaView
-      style={[
-        styles.container,
-        { backgroundColor: isDark ? "#000" : "#f8f9fa" },
-      ]}
-    >
-      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
+  useEffect(() => {
+    setOffset(0);
+    setHasMore(true);
+    setFeeds([]);
+    setTotalRecords(0);
+    fetchFeeds(0);
+  }, [fetchFeeds]);
 
-      {/* Header with Search and Filter */}
-      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        <Text style={[styles.mainTitle, { color: isDark ? "#fff" : "#000" }]}>
-          Tradingfeed
-        </Text>
+  const onRefresh = () => {
+    setOffset(0);
+    fetchFeeds(0, true);
+  };
 
-        <View style={styles.searchRow}>
-          <View
-            style={[
-              styles.searchBar,
-              { backgroundColor: isDark ? "#1a1a1a" : "#fff" },
-            ]}
-          >
-            <TextInput
-              placeholder="Search"
-              placeholderTextColor="#999"
-              style={[styles.searchInput, { color: isDark ? "#fff" : "#000" }]}
-              value={search}
-              onChangeText={setSearch}
-            />
-          </View>
-          <TouchableOpacity
-            style={[
-              styles.filterBtn,
-              { backgroundColor: isDark ? "#1a1a1a" : "#fff" },
-            ]}
-          >
-            <Ionicons name="filter-outline" size={20} color="#666" />
-            <Text style={styles.filterText}>Filter</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+  const handleLoadMore = () => {
+    if (!hasMore || loading || refreshing) return;
+    const nextOffset = offset + LIMIT;
+    setOffset(nextOffset);
+    fetchFeeds(nextOffset);
+  };
 
-      {/* Stats and Grid Toggle */}
-      <View style={styles.statsRow}>
-        <Text style={styles.statsText}>606 broadcasts found</Text>
-        <View style={styles.toggleIcons}>
-          <MaterialCommunityIcons
-            name="format-list-bulleted"
-            size={24}
-            color="#3b66f5"
-          />
-          <MaterialCommunityIcons
-            name="view-grid-outline"
-            size={24}
-            color="#999"
-            style={{ marginLeft: 10 }}
-          />
-        </View>
-      </View>
+  const filteredFeeds = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return feeds;
+    return feeds.filter((item) => {
+      const productName = item?.product?.name || "";
+      const brandName = item?.product?.brand?.name || "";
+      const companyName =
+        item?.user?.companyName ||
+        item?.user?.name ||
+        item?.user?.username ||
+        "";
+      return (
+        productName.toLowerCase().includes(term) ||
+        brandName.toLowerCase().includes(term) ||
+        companyName.toLowerCase().includes(term)
+      );
+    });
+  }, [feeds, search]);
 
-      {/* Table Header Labels */}
+  const renderItem = ({ item }: any) => {
+    const typeLabel = formatType(item?.type);
+    const typeColors =
+      typeLabel === "Request"
+        ? { bg: "#E8F5E9", text: "#2E7D32" }
+        : { bg: "#EEF2FF", text: "#3730A3" };
+
+    const imageUrl = resolveUrl(item?.images?.[0] || item?.product?.image);
+    const brandName = item?.product?.brand?.name || "Unknown";
+    const productName = item?.product?.name || "Unknown";
+    const companyName =
+      item?.user?.companyName ||
+      item?.user?.name ||
+      item?.user?.username ||
+      "Unknown";
+    const countryName = item?.spec?.name || item?.user?.country || "N/A";
+    const condition = formatCondition(item?.condition);
+    const priceLabel = formatPrice(item?.price, item?.currency);
+    const qtyLabel =
+      item?.qty === null || item?.qty === undefined ? "N/A" : String(item?.qty);
+    const dateLabel = formatDate(item?.created_at);
+
+    const chips = [
+      item?.storage?.name,
+      item?.grade?.name,
+      item?.color?.name,
+      item?.spec?.name,
+    ].filter(Boolean);
+
+    return (
       <View
         style={[
-          styles.tableHeader,
-          { backgroundColor: isDark ? "#111" : "#f1f3f5" },
+          styles.card,
+          { backgroundColor: theme.card, borderColor: theme.border },
         ]}
       >
-        <Text style={styles.headerLabelType}>Type</Text>
-        <Text style={styles.headerLabelBrand}>Brand</Text>
-        <Text style={styles.headerLabelTitle}>Title</Text>
+        <View style={styles.cardHeader}>
+          <View style={[styles.typeBadge, { backgroundColor: typeColors.bg }]}>
+            <Text style={[styles.typeText, { color: typeColors.text }]}>
+              {typeLabel}
+            </Text>
+          </View>
+          <Text style={[styles.dateText, { color: theme.subText }]}>
+            {dateLabel}
+          </Text>
+        </View>
+
+        <View style={styles.titleRow}>
+          {imageUrl ? (
+            <Image source={{ uri: imageUrl }} style={styles.thumb} />
+          ) : (
+            <View style={[styles.thumb, styles.thumbPlaceholder]}>
+              <Ionicons name="image-outline" size={18} color={theme.subText} />
+            </View>
+          )}
+          <View style={styles.titleBlock}>
+            <Text style={[styles.productName, { color: theme.text }]}>
+              {productName}
+            </Text>
+            <Text style={[styles.brandName, { color: theme.subText }]}>
+              {brandName}
+            </Text>
+            {chips.length > 0 ? (
+              <View style={styles.chipRow}>
+                {chips.map((chip, index) => (
+                  <View
+                    key={`${item.id}-chip-${index}`}
+                    style={[styles.chip, { backgroundColor: theme.chipBg }]}
+                  >
+                    <Text style={[styles.chipText, { color: theme.subText }]}>
+                      {chip}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </View>
+        </View>
+
+        <View style={styles.infoGrid}>
+          <View style={styles.infoItem}>
+            <Text style={[styles.infoLabel, { color: theme.subText }]}>
+              Condition
+            </Text>
+            <Text style={[styles.infoValue, { color: theme.text }]}>
+              {condition}
+            </Text>
+          </View>
+          <View style={styles.infoItem}>
+            <Text style={[styles.infoLabel, { color: theme.subText }]}>
+              Price
+            </Text>
+            <Text
+              style={[
+                styles.infoValue,
+                {
+                  color:
+                    priceLabel === "Negotiable" ? theme.subText : "#16A34A",
+                },
+              ]}
+            >
+              {priceLabel}
+            </Text>
+          </View>
+          <View style={styles.infoItem}>
+            <Text style={[styles.infoLabel, { color: theme.subText }]}>
+              Qty
+            </Text>
+            <Text style={[styles.infoValue, { color: theme.text }]}>
+              {qtyLabel}
+            </Text>
+          </View>
+          <View style={styles.infoItem}>
+            <Text style={[styles.infoLabel, { color: theme.subText }]}>
+              Country
+            </Text>
+            <Text style={[styles.infoValue, { color: theme.text }]}>
+              {countryName}
+            </Text>
+          </View>
+          <View style={styles.infoItem}>
+            <Text style={[styles.infoLabel, { color: theme.subText }]}>
+              Company
+            </Text>
+            <Text
+              style={[styles.infoValue, { color: theme.text }]}
+              numberOfLines={1}
+            >
+              {companyName}
+            </Text>
+          </View>
+          <View style={styles.infoItem}>
+            <Text style={[styles.infoLabel, { color: theme.subText }]}>
+              Date
+            </Text>
+            <Text style={[styles.infoValue, { color: theme.text }]}>
+              {dateLabel || "N/A"}
+            </Text>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  const statsLabel = selectedProduct
+    ? `${totalRecords || filteredFeeds.length} broadcasts found`
+    : search.trim()
+      ? `${filteredFeeds.length} results`
+      : `${totalRecords || filteredFeeds.length} broadcasts found`;
+
+  return (
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]}>
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
+
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+        <Text style={[styles.mainTitle, { color: theme.text }]}>
+          Tradingfeed
+        </Text>
+        <View style={styles.searchArea}>
+          <View style={styles.searchRow}>
+            <View
+              style={[
+                styles.searchBar,
+                { backgroundColor: theme.card, borderColor: theme.border },
+              ]}
+            >
+              <Ionicons name="search-outline" size={18} color={theme.subText} />
+              <TextInput
+                placeholder="Search"
+                placeholderTextColor={theme.subText}
+                style={[styles.searchInput, { color: theme.text }]}
+                value={search}
+                onChangeText={handleSearchChange}
+                onFocus={() => setProductOpen(true)}
+              />
+              {search.length > 0 ? (
+                <TouchableOpacity onPress={clearSearch}>
+                  <Ionicons name="close-circle" size={16} color={theme.subText} />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+            <TouchableOpacity
+              style={[
+                styles.filterBtn,
+                { backgroundColor: theme.card, borderColor: theme.border },
+              ]}
+              onPress={() => {
+                setFilterOpen(true);
+                closePicker();
+                setSortOpen(false);
+                setProductOpen(false);
+              }}
+            >
+              <Ionicons name="filter-outline" size={18} color={theme.subText} />
+              <Text style={[styles.filterText, { color: theme.subText }]}>
+                Filter
+              </Text>
+            </TouchableOpacity>
+          </View>
+          
+          {productOpen && search.trim().length > 0 && !selectedProduct ? (
+            <View
+              style={[
+                styles.productDropdown,
+                { backgroundColor: theme.card, borderColor: theme.border },
+              ]}
+            >
+              {productLoading ? (
+                <ActivityIndicator color={theme.primary} size="small" />
+              ) : (
+                <FlatList
+                  data={productOptions}
+                  keyExtractor={(item) => String(item.id)}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      style={styles.productOption}
+                      onPress={() => {
+                        setSelectedProduct(item);
+                        setSearch(item.name);
+                        setProductOpen(false);
+                      }}
+                    >
+                      <Text style={[styles.productName, { color: theme.text }]}>
+                        {item.name}
+                      </Text>
+                      <Text style={[styles.productMeta, { color: theme.subText }]}>
+                        {item.brand} • {item.category}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                  style={styles.productList}
+                  contentContainerStyle={{ paddingVertical: 4 }}
+                  keyboardShouldPersistTaps="handled"
+                  nestedScrollEnabled
+                  ListEmptyComponent={() => (
+                    <Text style={[styles.productEmpty, { color: theme.subText }]}>
+                      No products found.
+                    </Text>
+                  )}
+                />
+              )}
+            </View>
+          ) : null}
+
+        </View>
       </View>
 
-      <FlatList
-        data={broadcasts}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        contentContainerStyle={{ paddingBottom: 100 }}
-      />
+      <View style={styles.statsRow}>
+        <Text style={[styles.statsText, { color: theme.subText }]}>
+          {statsLabel}
+        </Text>
+        <View style={styles.sortWrapper}>
+          <TouchableOpacity
+            style={[
+              styles.sortBtn,
+              { borderColor: theme.border, backgroundColor: theme.card },
+            ]}
+            onPress={() => setSortOpen((prev) => !prev)}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.sortText, { color: theme.text }]}>
+              {activeSortLabel}
+            </Text>
+            <Ionicons
+              name={sortOpen ? "chevron-up" : "chevron-down"}
+              size={16}
+              color={theme.subText}
+            />
+          </TouchableOpacity>
+          {sortOpen ? (
+            <View
+              style={[
+                styles.dropdown,
+                { backgroundColor: theme.card, borderColor: theme.border },
+              ]}
+            >
+              {sortOptions.map((option) => {
+                const isActive = option.value === sortBy;
+                return (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={styles.dropdownItem}
+                    onPress={() => {
+                      setSortBy(option.value);
+                      setSortOpen(false);
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.dropdownText,
+                        { color: isActive ? theme.primary : theme.text },
+                      ]}
+                    >
+                      {option.label}
+                    </Text>
+                    {isActive ? (
+                      <Ionicons
+                        name="checkmark"
+                        size={16}
+                        color={theme.primary}
+                      />
+                    ) : null}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ) : null}
+        </View>
+      </View>
 
-      {/* Floating Action Button for Chat */}
-      <TouchableOpacity style={styles.fab}>
-        <Ionicons name="chatbubble-ellipses-outline" size={28} color="#000" />
-      </TouchableOpacity>
+      {loading && feeds.length === 0 ? (
+        <View style={styles.centered}>
+          <ActivityIndicator color={theme.primary} size="large" />
+        </View>
+      ) : (
+        <FlatList
+          data={filteredFeeds}
+          keyExtractor={(item, index) => String(item?.id || index)}
+          renderItem={renderItem}
+          contentContainerStyle={{
+            paddingHorizontal: 16,
+            paddingBottom: insets.bottom + 120,
+          }}
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.4}
+          onScrollBeginDrag={() => {
+            setSortOpen(false);
+            setProductOpen(false);
+          }}
+          ListEmptyComponent={() => (
+            <View style={styles.centered}>
+              <Text style={{ color: theme.subText, marginTop: 30 }}>
+                No broadcasts found.
+              </Text>
+            </View>
+          )}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={theme.primary}
+            />
+          }
+          ListFooterComponent={
+            hasMore && !loading && filteredFeeds.length > 0 ? (
+              <ActivityIndicator
+                style={{ marginTop: 12 }}
+                color={theme.primary}
+              />
+            ) : null
+          }
+        />
+      )}
+
+
+      <Modal
+        visible={sheetVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeSheet}
+      >
+        <Animated.View style={[styles.modalOverlay, { opacity: backdropOpacity }]}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={closeSheet}
+          />
+          <Animated.View
+            style={[
+              styles.sheet,
+              {
+                backgroundColor: theme.bg,
+                borderColor: theme.border,
+                paddingBottom: insets.bottom + 8,
+                transform: [{ translateY: sheetTranslateY }],
+                opacity: sheetAnim,
+              },
+            ]}
+          >
+            <View
+              style={[styles.sheetHandle, { backgroundColor: theme.border }]}
+            />
+            <View style={[styles.sheetHeader, { borderBottomColor: theme.border }]}
+            >
+              <View style={styles.sheetHeaderLeft}>
+                {isPickerView ? (
+                  <TouchableOpacity style={styles.backBtn} onPress={closePicker}>
+                    <Ionicons name="chevron-back" size={20} color={theme.text} />
+                  </TouchableOpacity>
+                ) : null}
+                <Text style={[styles.sheetTitle, { color: theme.text }]}>{sheetTitle}</Text>
+              </View>
+              <TouchableOpacity onPress={closeSheet}>
+                <Ionicons name="close" size={22} color={theme.text} />
+              </TouchableOpacity>
+            </View>
+
+            {isPickerView ? (
+              <>
+                <View
+                  style={[
+                    styles.pickerSearch,
+                    { backgroundColor: theme.card, borderColor: theme.border },
+                  ]}
+                >
+                  <Ionicons name="search-outline" size={18} color={theme.subText} />
+                  <TextInput
+                    placeholder={`Search ${activePickerTitle}`}
+                    placeholderTextColor={theme.subText}
+                    style={[styles.pickerInput, { color: theme.text }]}
+                    value={pickerSearch}
+                    onChangeText={setPickerSearch}
+                  />
+                </View>
+                {pickerLoading ? (
+                  <View style={styles.centered}>
+                    <ActivityIndicator color={theme.primary} size="large" />
+                  </View>
+                ) : (
+                  <FlatList
+                    data={pickerOptions}
+                    keyExtractor={(item, index) => String(item.id || item.code || index)}
+                    keyboardShouldPersistTaps="handled"
+                    renderItem={({ item }) => {
+                      const label =
+                        activePicker === "country"
+                          ? `${item.name} (${item.code})`
+                          : activePicker === "category"
+                            ? item.label || item.name
+                            : item.name;
+                      return (
+                        <TouchableOpacity
+                          style={[styles.pickerRow, { borderBottomColor: theme.border }]}
+                          onPress={() => {
+                            if (!activePicker) return;
+                            if (activePicker === "country") {
+                              setFilters((prev: any) => ({ ...prev, country: item }));
+                            } else if (activePicker === "category") {
+                              setFilters((prev: any) => ({ ...prev, category: item }));
+                            } else if (activePicker === "brand") {
+                              setFilters((prev: any) => ({ ...prev, brand: item }));
+                            } else if (activePicker === "grade") {
+                              setFilters((prev: any) => ({ ...prev, grade: item }));
+                            } else if (activePicker === "color") {
+                              setFilters((prev: any) => ({ ...prev, color: item }));
+                            } else if (activePicker === "spec") {
+                              setFilters((prev: any) => ({ ...prev, spec: item }));
+                            } else if (activePicker === "storage") {
+                              setFilters((prev: any) => ({ ...prev, storage: item }));
+                            }
+                            closePicker();
+                          }}
+                        >
+                          <Text style={[styles.pickerText, { color: theme.text }]}>
+                            {label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    }}
+                    ListEmptyComponent={() => (
+                      <Text style={[styles.productEmpty, { color: theme.subText }]}>No results.</Text>
+                    )}
+                  />
+                )}
+              </>
+            ) : (
+              <>
+                <ScrollView
+                  contentContainerStyle={styles.filterContent}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  <TouchableOpacity
+                    style={[
+                      styles.filterField,
+                      { borderColor: theme.border, backgroundColor: theme.card },
+                    ]}
+                    onPress={() => openPicker("country")}
+                  >
+                    <Text
+                      style={[
+                        styles.filterValue,
+                        { color: filters.country ? theme.text : theme.subText },
+                      ]}
+                    >
+                      {filters.country
+                        ? `${filters.country.name} (${filters.country.code})`
+                        : "Country"}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={16} color={theme.subText} />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.filterField,
+                      { borderColor: theme.border, backgroundColor: theme.card },
+                    ]}
+                    onPress={() => openPicker("category")}
+                  >
+                    <Text
+                      style={[
+                        styles.filterValue,
+                        { color: filters.category ? theme.text : theme.subText },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {filters.category?.label || filters.category?.name || "Category"}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={16} color={theme.subText} />
+                  </TouchableOpacity>
+
+                  <View
+                    style={[
+                      styles.segmentRow,
+                      { borderColor: theme.border, backgroundColor: theme.card },
+                    ]}
+                  >
+                    <TouchableOpacity
+                      style={[
+                        styles.segmentBtn,
+                        filters.type === "wts" && styles.segmentActive,
+                      ]}
+                      onPress={() => toggleType("wts")}
+                    >
+                      <Text
+                        style={[
+                          styles.segmentText,
+                          {
+                            color:
+                              filters.type === "wts" ? theme.primary : theme.subText,
+                          },
+                        ]}
+                      >
+                        Offer
+                      </Text>
+                    </TouchableOpacity>
+                    <View style={[styles.segmentDivider, { backgroundColor: theme.border }]} />
+                    <TouchableOpacity
+                      style={[
+                        styles.segmentBtn,
+                        filters.type === "wtb" && styles.segmentActive,
+                      ]}
+                      onPress={() => toggleType("wtb")}
+                    >
+                      <Text
+                        style={[
+                          styles.segmentText,
+                          {
+                            color:
+                              filters.type === "wtb" ? theme.primary : theme.subText,
+                          },
+                        ]}
+                      >
+                        Request
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.filterField,
+                      { borderColor: theme.border, backgroundColor: theme.card },
+                    ]}
+                    onPress={() => openPicker("brand")}
+                  >
+                    <Text
+                      style={[
+                        styles.filterValue,
+                        { color: filters.brand ? theme.text : theme.subText },
+                      ]}
+                    >
+                      {filters.brand?.name || "Brand"}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={16} color={theme.subText} />
+                  </TouchableOpacity>
+
+                  <View
+                    style={[
+                      styles.segmentRow,
+                      { borderColor: theme.border, backgroundColor: theme.card },
+                    ]}
+                  >
+                    <TouchableOpacity
+                      style={[
+                        styles.segmentBtn,
+                        filters.condition === "new" && styles.segmentActive,
+                      ]}
+                      onPress={() => toggleCondition("new")}
+                    >
+                      <Text
+                        style={[
+                          styles.segmentText,
+                          {
+                            color:
+                              filters.condition === "new"
+                                ? theme.primary
+                                : theme.subText,
+                          },
+                        ]}
+                      >
+                        New
+                      </Text>
+                    </TouchableOpacity>
+                    <View style={[styles.segmentDivider, { backgroundColor: theme.border }]} />
+                    <TouchableOpacity
+                      style={[
+                        styles.segmentBtn,
+                        filters.condition === "used" && styles.segmentActive,
+                      ]}
+                      onPress={() => toggleCondition("used")}
+                    >
+                      <Text
+                        style={[
+                          styles.segmentText,
+                          {
+                            color:
+                              filters.condition === "used"
+                                ? theme.primary
+                                : theme.subText,
+                          },
+                        ]}
+                      >
+                        Used
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.filterField,
+                      { borderColor: theme.border, backgroundColor: theme.card },
+                    ]}
+                    onPress={() => openPicker("grade")}
+                  >
+                    <Text
+                      style={[
+                        styles.filterValue,
+                        { color: filters.grade ? theme.text : theme.subText },
+                      ]}
+                    >
+                      {filters.grade?.name || "Grade"}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={16} color={theme.subText} />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.filterField,
+                      { borderColor: theme.border, backgroundColor: theme.card },
+                    ]}
+                    onPress={() => openPicker("color")}
+                  >
+                    <Text
+                      style={[
+                        styles.filterValue,
+                        { color: filters.color ? theme.text : theme.subText },
+                      ]}
+                    >
+                      {filters.color?.name || "Color"}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={16} color={theme.subText} />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.filterField,
+                      { borderColor: theme.border, backgroundColor: theme.card },
+                    ]}
+                    onPress={() => openPicker("spec")}
+                  >
+                    <Text
+                      style={[
+                        styles.filterValue,
+                        { color: filters.spec ? theme.text : theme.subText },
+                      ]}
+                    >
+                      {filters.spec?.name || "Specification"}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={16} color={theme.subText} />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.filterField,
+                      { borderColor: theme.border, backgroundColor: theme.card },
+                    ]}
+                    onPress={() => openPicker("storage")}
+                  >
+                    <Text
+                      style={[
+                        styles.filterValue,
+                        { color: filters.storage ? theme.text : theme.subText },
+                      ]}
+                    >
+                      {filters.storage?.name || "Storage"}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={16} color={theme.subText} />
+                  </TouchableOpacity>
+                </ScrollView>
+                <View
+                  style={[
+                    styles.sheetFooter,
+                    { borderTopColor: theme.border, backgroundColor: theme.bg },
+                  ]}
+                >
+                  <TouchableOpacity
+                    style={[
+                      styles.clearBtn,
+                      { backgroundColor: theme.card, borderColor: theme.border },
+                    ]}
+                    onPress={clearFilters}
+                  >
+                    <Text style={[styles.clearText, { color: theme.text }]}>Clear</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.applyBtn, { backgroundColor: theme.primary }]}
+                    onPress={() => setFilterOpen(false)}
+                  >
+                    <Text style={styles.applyText}>Apply</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </Animated.View>
+        </Animated.View>
+      </Modal>
 
       <BottomNav />
     </SafeAreaView>
@@ -160,77 +1251,260 @@ const TradingFeed = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { paddingHorizontal: 15, paddingBottom: 15 },
-  mainTitle: { fontSize: 28, fontWeight: "bold", marginBottom: 15 },
+  centered: { flex: 1, justifyContent: "center", alignItems: "center" },
+  header: { paddingHorizontal: 16, paddingBottom: 12 },
+  mainTitle: { fontSize: 26, fontWeight: "800", marginBottom: 12 },
+  searchArea: { marginBottom: 8 },
   searchRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   searchBar: {
     flex: 1,
-    height: 45,
-    borderRadius: 25,
-    paddingHorizontal: 20,
+    height: 44,
+    borderRadius: 22,
+    paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: "#ddd",
-    justifyContent: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
-  searchInput: { fontSize: 16 },
+  searchInput: { fontSize: 15, flex: 1 },
   filterBtn: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 15,
-    height: 45,
-    borderRadius: 25,
+    paddingHorizontal: 14,
+    height: 44,
+    borderRadius: 22,
     borderWidth: 1,
-    borderColor: "#ddd",
+    gap: 6,
   },
-  filterText: { marginLeft: 5, color: "#666" },
+  filterText: { fontSize: 13, fontWeight: "600" },
   statsRow: {
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
-    padding: 15,
-    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    zIndex: 10,
   },
-  statsText: { color: "#666", fontSize: 14 },
-  toggleIcons: { flexDirection: "row" },
-  tableHeader: {
+  statsText: { fontSize: 13 },
+  sortWrapper: { position: "relative", alignItems: "flex-end" },
+  sortBtn: {
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
     flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  sortText: { fontSize: 12, fontWeight: "600" },
+  dropdown: {
+    position: "absolute",
+    right: 0,
+    top: 38,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    minWidth: 190,
+    zIndex: 20,
+    elevation: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+  },
+  dropdownItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 8,
+  },
+  dropdownText: { fontSize: 13, fontWeight: "600" },
+  productDropdown: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 6,
+    maxHeight: 220,
+    overflow: "hidden",
+    elevation: 6,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+  },
+  productList: {
+    maxHeight: 220,
+    flexGrow: 0,
+  },
+  productOption: {
+    paddingHorizontal: 12,
     paddingVertical: 10,
-    paddingHorizontal: 15,
   },
-  headerLabelType: { width: "25%", fontWeight: "bold", color: "#666" },
-  headerLabelBrand: { width: "25%", fontWeight: "bold", color: "#666" },
-  headerLabelTitle: { width: "50%", fontWeight: "bold", color: "#666" },
-  row: {
+  productMeta: {
+    marginTop: 2,
+    fontSize: 12,
+  },
+  productEmpty: {
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 12,
+  },
+  card: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 14,
+  },
+  cardHeader: {
     flexDirection: "row",
-    paddingVertical: 15,
-    paddingHorizontal: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
+    justifyContent: "space-between",
     alignItems: "center",
+    marginBottom: 12,
   },
-  columnType: { width: "25%" },
-  columnBrand: { width: "25%", fontSize: 14 },
-  columnTitle: { width: "50%", fontSize: 14, fontWeight: "500" },
-  badge: {
-    alignSelf: "flex-start",
+  typeBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 6,
+    borderRadius: 10,
   },
-  badgeText: { fontSize: 12, fontWeight: "bold" },
-  fab: {
-    position: "absolute",
-    bottom: 90,
-    right: 20,
+  typeText: { fontSize: 12, fontWeight: "700" },
+  dateText: { fontSize: 12 },
+  titleRow: { flexDirection: "row", gap: 12 },
+  thumb: {
     width: 60,
     height: 60,
-    borderRadius: 30,
-    backgroundColor: "#fff",
-    elevation: 5,
+    borderRadius: 12,
+    backgroundColor: "#E2E8F0",
+  },
+  thumbPlaceholder: {
     justifyContent: "center",
     alignItems: "center",
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
   },
+  titleBlock: { flex: 1 },
+  productName: { fontSize: 16, fontWeight: "700" },
+  brandName: { fontSize: 13, marginTop: 2 },
+  chipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 8,
+  },
+  chip: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  chipText: { fontSize: 11, fontWeight: "600" },
+  infoGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginTop: 12,
+  },
+  infoItem: {
+    width: "50%",
+    marginBottom: 10,
+  },
+  infoLabel: { fontSize: 11, fontWeight: "600" },
+  infoValue: { fontSize: 13, marginTop: 2, fontWeight: "600" },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.35)",
+    justifyContent: "flex-end",
+  },
+  sheet: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    borderWidth: 1,
+    maxHeight: "88%",
+    overflow: "hidden",
+  },
+  sheetHandle: {
+    alignSelf: "center",
+    width: 42,
+    height: 4,
+    borderRadius: 999,
+    marginTop: 10,
+    marginBottom: 8,
+  },
+  sheetHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  sheetTitle: { fontSize: 18, fontWeight: "700" },
+  sheetHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 6 },
+  backBtn: { paddingRight: 4, paddingVertical: 2 },
+  filterContent: { padding: 16, paddingBottom: 120, gap: 12 },
+  filterField: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  filterValue: { fontSize: 14, fontWeight: "600", flex: 1 },
+  segmentRow: {
+    flexDirection: "row",
+    borderWidth: 1,
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+  segmentBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  segmentActive: {
+    backgroundColor: "rgba(59, 102, 245, 0.12)",
+  },
+  segmentText: { fontSize: 14, fontWeight: "600" },
+  segmentDivider: { width: StyleSheet.hairlineWidth },
+  sheetFooter: {
+    flexDirection: "row",
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  clearBtn: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  clearText: { fontSize: 14, fontWeight: "600" },
+  applyBtn: {
+    flex: 1,
+    borderRadius: 999,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  applyText: { fontSize: 14, fontWeight: "700", color: "#FFFFFF" },
+  pickerSearch: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginHorizontal: 16,
+    marginTop: 12,
+    paddingHorizontal: 12,
+    height: 42,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  pickerInput: { flex: 1, fontSize: 14 },
+  pickerRow: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  pickerText: { fontSize: 14, fontWeight: "600" },
 });
 
 export default TradingFeed;

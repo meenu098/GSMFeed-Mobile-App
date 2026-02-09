@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   ContactsMenuIcons,
   MarketingIcon,
+  MarketPlaceMenuIcons,
   NewsFeedMenuIcons,
   Settings,
 } from "../../components/icons/sidebarIcon";
@@ -101,11 +102,11 @@ export default function Sidebar() {
 
   const menuItems = [
     { icon: NewsFeedMenuIcons, label: "Newsfeed", screen: "/screens/Newsfeed" },
-    // {
-    //   icon: MarketPlaceMenuIcons,
-    //   label: "TradingFeed",
-    //   screen: "/screens/TradingFeed",
-    // },
+    {
+      icon: MarketPlaceMenuIcons,
+      label: "Trading Feed",
+      screen: "/screens/TradingFeed",
+    },
     { icon: ContactsMenuIcons, label: "Contacts", screen: "/screens/Contacts" },
     {
       icon: MarketingIcon,
