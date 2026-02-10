@@ -6,6 +6,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  AppState,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -18,6 +19,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import CONFIG from "../../shared/config";
 import { useTheme } from "../../shared/themeContext";
+
+const CHAT_ROOM_POLL_MS = 3500;
 
 const MessageBubble = ({ item, theme, isDark, currentUserId }: any) => {
   const isMine = item.sender_id === currentUserId;
@@ -60,11 +63,18 @@ export default function IndividualChatScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { chatId, chatName, initialMessage } = useLocalSearchParams();
+  const chatIdValue = Array.isArray(chatId) ? chatId[0] : chatId;
+  const log = (...args: any[]) => {
+    if (__DEV__) console.log(...args);
+  };
   const [messages, setMessages] = useState<any[]>([]);
   const [inputText, setInputText] = useState("");
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const flatListRef = useRef<FlatList>(null);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollingInFlightRef = useRef(false);
+  const lastMessageIdRef = useRef<number | null>(null);
 
   const theme = {
     bg: isDark ? "#0B0E14" : "#F8FAFC",
@@ -82,12 +92,54 @@ export default function IndividualChatScreen() {
         ? initialMessage[0] || ""
         : "";
 
+  useEffect(() => {
+    log("[chat] params", { chatId, chatIdValue, chatName });
+  }, [chatId, chatIdValue, chatName]);
+
+  const getMessageId = useCallback((msg: any) => {
+    return (
+      msg?.id ??
+      msg?.message_id ??
+      msg?.messageId ??
+      msg?._id ??
+      `${msg?.sent_at || ""}-${msg?.sender_id || ""}-${msg?.content || ""}`
+    );
+  }, []);
+
   const normalizeMessage = useCallback(
     (msg: any) => ({
       ...msg,
+      id: getMessageId(msg),
       content: msg?.content ?? msg?.message ?? "",
     }),
-    [],
+    [getMessageId],
+  );
+
+  const getLastNumericMessageId = useCallback(
+    (items: any[]) => {
+      let maxId: number | null = null;
+      items.forEach((msg) => {
+        const rawId = getMessageId(msg);
+        const num = Number(rawId);
+        if (Number.isFinite(num)) {
+          maxId = maxId === null ? num : Math.max(maxId, num);
+        }
+      });
+      return maxId;
+    },
+    [getMessageId],
+  );
+
+  const mergeMessages = useCallback(
+    (prev: any[], next: any[]) => {
+      if (!next.length) return prev;
+      const existingIds = new Set(prev.map((msg) => String(getMessageId(msg))));
+      const filtered = next.filter(
+        (msg) => !existingIds.has(String(getMessageId(msg))),
+      );
+      return [...prev, ...filtered];
+    },
+    [getMessageId],
   );
 
   const markAsRead = async (token: string) => {
@@ -98,7 +150,7 @@ export default function IndividualChatScreen() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ chat_id: chatId }), // Must be POST with body
+        body: JSON.stringify({ chat_id: chatIdValue }), // Must be POST with body
       });
     } catch (e) {
     }
@@ -111,6 +163,7 @@ export default function IndividualChatScreen() {
       const user = JSON.parse(userString);
       setCurrentUserId(user.id);
 
+      log("[chat] fetchMessages", { chatId: chatIdValue });
       const response = await fetch(
         `${CONFIG.API_ENDPOINT}/api/gsmfeed-chat/get-messages`,
         {
@@ -119,16 +172,20 @@ export default function IndividualChatScreen() {
             "Content-Type": "application/json",
             Authorization: `Bearer ${user.token}`,
           },
-          body: JSON.stringify({ chat_id: chatId, limit: 50, offset: 0 }),
+          body: JSON.stringify({ chat_id: chatIdValue, limit: 50, offset: 0 }),
         },
       );
 
       const json = await response.json();
+      log("[chat] send response", { status: json?.status });
       if (json.status) {
         const rawMessages = json.data?.messages || [];
         const normalized = rawMessages.map(normalizeMessage);
         if (normalized.length > 0) {
-          setMessages(normalized.reverse());
+          const ordered = normalized.reverse();
+          setMessages(ordered);
+          const lastId = getLastNumericMessageId(ordered);
+          if (lastId !== null) lastMessageIdRef.current = lastId;
         } else if (initialMessageText.trim()) {
           setMessages([
             {
@@ -145,11 +202,109 @@ export default function IndividualChatScreen() {
     } finally {
       setLoading(false);
     }
-  }, [chatId, initialMessageText, normalizeMessage]);
+  }, [chatIdValue, getLastNumericMessageId, initialMessageText, normalizeMessage]);
 
   useEffect(() => {
     fetchMessages();
   }, [fetchMessages]);
+
+  const pollMessages = useCallback(async () => {
+    if (pollingInFlightRef.current) return;
+    pollingInFlightRef.current = true;
+    try {
+      const userString = await AsyncStorage.getItem("user");
+      if (!userString) return;
+      const user = JSON.parse(userString);
+
+      log("[chat] poll tick", { chatId: chatIdValue, after: lastMessageIdRef.current });
+      const requestMessages = async (useAfterId: boolean) => {
+        const payload: any = {
+          chat_id: chatIdValue,
+          limit: 50,
+          offset: 0,
+        };
+        if (useAfterId && lastMessageIdRef.current !== null) {
+          payload.after_message_id = lastMessageIdRef.current;
+        }
+
+        const response = await fetch(
+          `${CONFIG.API_ENDPOINT}/api/gsmfeed-chat/get-messages`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${user.token}`,
+            },
+            body: JSON.stringify(payload),
+          },
+        );
+        const json = await response.json();
+        log("[chat] poll response", { status: json?.status, count: json?.data?.messages?.length, usedAfterId: useAfterId });
+        if (!json.status && useAfterId) {
+          return requestMessages(false);
+        }
+        return json;
+      };
+
+      const json = await requestMessages(true);
+      if (json?.status) {
+        const rawMessages = json.data?.messages || [];
+        if (rawMessages.length > 0) {
+          const normalized = rawMessages.map(normalizeMessage);
+          const ordered = normalized.reverse();
+          setMessages((prev) => {
+            const next = mergeMessages(prev, ordered);
+            const lastId = getLastNumericMessageId(next);
+            if (lastId !== null) lastMessageIdRef.current = lastId;
+            return next;
+          });
+          markAsRead(user.token);
+        }
+      }
+    } catch (error) {
+    } finally {
+      pollingInFlightRef.current = false;
+    }
+  }, [chatIdValue, getLastNumericMessageId, mergeMessages, normalizeMessage]);
+
+  const startPolling = useCallback(() => {
+    if (!chatIdValue) return;
+    if (pollingRef.current) return;
+    pollingRef.current = setInterval(() => {
+      pollMessages();
+    }, CHAT_ROOM_POLL_MS);
+  }, [chatIdValue, pollMessages]);
+
+  const stopPolling = useCallback(() => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!chatIdValue) return;
+    startPolling();
+    return () => {
+      stopPolling();
+    };
+  }, [chatIdValue, startPolling, stopPolling]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (!chatIdValue) return;
+      if (nextState === "active") {
+        startPolling();
+        pollMessages();
+      } else {
+        stopPolling();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [chatIdValue, pollMessages, startPolling, stopPolling]);
 
   const handleSendMessage = async () => {
     if (!inputText.trim()) return;
@@ -168,16 +323,22 @@ export default function IndividualChatScreen() {
             Authorization: `Bearer ${user.token}`,
           },
           body: JSON.stringify({
-            chat_id: chatId,
+            chat_id: chatIdValue,
             content: tempMsg,
             type: "text",
           }),
         },
       );
       const json = await response.json();
+      log("[chat] fetchMessages response", { status: json?.status, count: json?.data?.messages?.length });
       if (json.status) {
         const nextMessage = normalizeMessage(json.data);
-        setMessages((prev) => [...prev, nextMessage]);
+        setMessages((prev) => {
+          const next = [...prev, nextMessage];
+          const lastId = getLastNumericMessageId(next);
+          if (lastId !== null) lastMessageIdRef.current = lastId;
+          return next;
+        });
       }
     } catch (e) {
     }
@@ -206,7 +367,7 @@ export default function IndividualChatScreen() {
         <FlatList
           ref={flatListRef}
           data={messages}
-          keyExtractor={(item) => item.id.toString()}
+          keyExtractor={(item, index) => String(item?.id ?? item?.message_id ?? index)}
           onContentSizeChange={() =>
             flatListRef.current?.scrollToEnd({ animated: true })
           }
