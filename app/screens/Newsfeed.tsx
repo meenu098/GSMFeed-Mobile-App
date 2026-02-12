@@ -44,12 +44,6 @@ import { AiIcon } from "../../components/icons/icons";
 import { useFeedData } from "../../hooks/useFeedData";
 import CONFIG from "../../shared/config";
 import { useTheme } from "../../shared/themeContext";
-import BroadcastSelection from "./BroadCastSelection";
-import BuyForm from "./ListingForms/BuyForm";
-import ListingSuccess from "./ListingForms/ListingSuccess";
-import ListingSummary from "./ListingForms/ListingSummary";
-import ProductDescAI from "./ListingForms/ProductDescAI";
-import SellForm from "./ListingForms/SellForm";
 
 const { width } = Dimensions.get("window");
 const CARD_WIDTH = width - 30;
@@ -1280,15 +1274,9 @@ const PostItem = ({ item, theme, onSave }: any) => {
 
 export default function NewsFeedScreen() {
   const { isDark } = useTheme();
+  const router = useRouter();
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [adIndex, setAdIndex] = useState(0);
-  const [currentView, setCurrentView] = useState<
-    "feed" | "selection" | "sell" | "buy"
-  >("feed");
-  const [isModalVisible, setIsModalVisible] = useState(false);
-
-  const [step, setStep] = useState(1);
-  const [formData, setFormData] = useState<any>(null);
 
   const { feed, isLoading, fetchFeed } = useFeedData(
     `${CONFIG.API_ENDPOINT}/api/feed/posts`,
@@ -1297,44 +1285,6 @@ export default function NewsFeedScreen() {
   useEffect(() => {
     fetchFeed(1);
   }, [fetchFeed]);
-
-  const handleBackToFeed = () => {
-    setCurrentView("feed");
-    setIsModalVisible(false);
-    setStep(1);
-    setFormData(null);
-  };
-
-  const handleFormNext = (data: any) => {
-    setFormData(data);
-    setStep(2);
-  };
-
-  const handleSummaryNext = (summaryData: any) => {
-    setFormData((prev: any) => ({ ...prev, ...summaryData }));
-    setStep(2.5);
-  };
-
-  const handleAINext = (finalData: any) => {
-    setFormData(finalData);
-    setStep(3);
-  };
-
-  const resetFlow = () => {
-    setStep(1);
-    setFormData(null);
-    setCurrentView("feed");
-  };
-
-  const handleOpenSelection = () => {
-    setCurrentView("selection");
-    setIsModalVisible(true);
-  };
-
-  const handleSelection = (type: "Sell" | "Buy") => {
-    setIsModalVisible(false);
-    setCurrentView(type === "Sell" ? "sell" : "buy");
-  };
 
   const theme = {
     bg: isDark ? "#050609" : "#F8FAFC",
@@ -1375,51 +1325,14 @@ export default function NewsFeedScreen() {
     } catch (error) {}
   }, []);
 
-  if (step === 3) {
-    return <ListingSuccess onFinish={resetFlow} />;
-  }
-
-  if (step === 2.5 && formData) {
-    return (
-      <ProductDescAI
-        listingData={formData}
-        onNext={handleAINext}
-        onBack={() => setStep(2)}
-      />
-    );
-  }
-
-  if (step === 2 && formData) {
-    return (
-      <ListingSummary
-        listingData={formData}
-        onNext={handleSummaryNext}
-        onBack={() => setStep(1)}
-      />
-    );
-  }
-
-  if (step === 1) {
-    if (currentView === "sell") {
-      return <SellForm onNext={handleFormNext} onBack={handleBackToFeed} />;
-    }
-    if (currentView === "buy") {
-      return <BuyForm onNext={handleFormNext} onBack={handleBackToFeed} />;
-    }
-  }
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
-      <BroadcastSelection
-        visible={isModalVisible}
-        onClose={handleBackToFeed}
-        onSelect={handleSelection}
-      />
       <View style={styles.topBar}>
         <TouchableOpacity
           style={styles.iconBtn}
           activeOpacity={0.7}
-          onPress={handleOpenSelection}
+          onPress={() => router.push("/screens/BroadcastManager")}
         >
           <Feather name="plus" size={24} color={theme.text} />
         </TouchableOpacity>
@@ -1451,6 +1364,7 @@ export default function NewsFeedScreen() {
           <TouchableOpacity
             style={styles.broadcastBtnContainer}
             activeOpacity={0.9}
+            onPress={() => router.push("/screens/BroadcastManager")}
           >
             <LinearGradient
               colors={["#3B66F5", "#6366F1"]}

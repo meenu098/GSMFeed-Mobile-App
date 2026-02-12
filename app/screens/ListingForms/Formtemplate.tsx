@@ -1,9 +1,10 @@
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { getEmojiFlag, TCountryCode } from "countries-list";
 import * as ImagePicker from "expo-image-picker";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
   FlatList,
   Image,
@@ -21,50 +22,71 @@ import { useTheme } from "../../../shared/themeContext";
 
 const { width } = Dimensions.get("window");
 
+type SelectOption = {
+  label: string;
+  value: number | string | null;
+  isCustom?: boolean;
+  colors?: unknown;
+  storages?: unknown;
+};
+
 interface FormTemplateProps {
   type: "Sell" | "Buy";
+  initialData?: any;
   onNext: (data: any) => void;
   onBack: () => void;
 }
 
 const FormTemplate = ({
   type: initialType,
+  initialData,
   onNext,
   onBack,
 }: FormTemplateProps) => {
   const { isDark } = useTheme();
-  const [activeType, setActiveType] = useState(initialType);
-  const [condition, setCondition] = useState("New");
+  const [activeType, setActiveType] = useState(
+    initialData?.type || initialType,
+  );
+  const [condition, setCondition] = useState(initialData?.condition || "New");
 
-  const [price, setPrice] = useState("");
-  const [quantity, setQuantity] = useState("");
+  const [price, setPrice] = useState(
+    initialData?.price ? String(initialData.price) : "",
+  );
+  const [quantity, setQuantity] = useState(
+    initialData?.quantity ? String(initialData.quantity) : "",
+  );
 
-  const [models, setModels] = useState<any[]>([]);
-  const [storages, setStorages] = useState<any[]>([]);
-  const [colorsData, setColorsData] = useState<any[]>([]);
-  const [specsData, setSpecsData] = useState<any[]>([]);
+  const [models, setModels] = useState<SelectOption[]>([]);
+  const [storages, setStorages] = useState<SelectOption[]>([]);
+  const [colorsData, setColorsData] = useState<SelectOption[]>([]);
+  const [specsData, setSpecsData] = useState<SelectOption[]>([]);
+  const [gradesData, setGradesData] = useState<SelectOption[]>([]);
 
   // UPDATED: Now tracks IDs for API compatibility
   const [searchQuery, setSearchQuery] = useState({
-    model: "",
-    modelId: null as number | null,
-    storage: "",
-    storageId: null as number | null,
-    color: "",
-    colorId: null as number | null,
-    specs: "",
-    specsId: null as number | null,
+    model: initialData?.model || "",
+    modelId: initialData?.modelId ?? null,
+    storage: initialData?.storage || "",
+    storageId: initialData?.storageId ?? null,
+    color: initialData?.color || "",
+    colorId: initialData?.colorId ?? null,
+    specs: initialData?.specs || "",
+    specsId: initialData?.specsId ?? null,
+    grade: initialData?.grade || "",
+    gradeId: initialData?.gradeId ?? null,
   });
 
   const [loadingField, setLoadingField] = useState<string | null>(null);
   const [showDropdown, setShowDropdown] = useState<string | null>(null);
 
-  const [currency, setCurrency] = useState("USD");
+  const [currency, setCurrency] = useState(initialData?.currency || "USD");
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
-  const [selectedImages, setSelectedImages] = useState<string[]>([]);
+  const [selectedImages, setSelectedImages] = useState<string[]>(
+    Array.isArray(initialData?.images) ? initialData.images : [],
+  );
   const [extraDetails, setExtraDetails] = useState<
     { label: string; value: string }[]
-  >([]);
+  >(Array.isArray(initialData?.extraDetails) ? initialData.extraDetails : []);
 
   const currencyOptions = [
     { label: `${getEmojiFlag("US" as TCountryCode)} USD`, value: "USD" },
@@ -81,6 +103,69 @@ const FormTemplate = ({
     inputBg: isDark ? "#0F172A" : "#FFFFFF",
   };
 
+  useEffect(() => {
+    if (!initialData) return;
+    setActiveType(initialData?.type || initialType);
+    setCondition(initialData?.condition || "New");
+    setPrice(initialData?.price ? String(initialData.price) : "");
+    setQuantity(initialData?.quantity ? String(initialData.quantity) : "");
+    setCurrency(initialData?.currency || "USD");
+    setSelectedImages(Array.isArray(initialData?.images) ? initialData.images : []);
+    setExtraDetails(
+      Array.isArray(initialData?.extraDetails) ? initialData.extraDetails : [],
+    );
+    setSearchQuery({
+      model: initialData?.model || "",
+      modelId: initialData?.modelId ?? null,
+      storage: initialData?.storage || "",
+      storageId: initialData?.storageId ?? null,
+      color: initialData?.color || "",
+      colorId: initialData?.colorId ?? null,
+      specs: initialData?.specs || "",
+      specsId: initialData?.specsId ?? null,
+      grade: initialData?.grade || "",
+      gradeId: initialData?.gradeId ?? null,
+    });
+  }, [initialData, initialType]);
+
+  const normalizeCsvOptions = (value: unknown) => {
+    if (!value) return [] as string[];
+    if (Array.isArray(value)) {
+      return value
+        .map((item) => String(item).trim())
+        .filter((item) => item.length > 0);
+    }
+    if (typeof value === "string") {
+      return value
+        .split(",")
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0);
+    }
+    return [];
+  };
+
+  const fetchSelectionOptions = async (
+    field: "storage" | "color" | "specs" | "grade",
+    searchText: string,
+  ): Promise<SelectOption[]> => {
+    let endpoint =
+      field === "specs" ? "selections/specs" : `selections/${field}s`;
+    if (field === "storage") endpoint = "selections/storage";
+    if (field === "grade") endpoint = "selection/grades";
+
+    const response = await fetch(
+      `${CONFIG.API_ENDPOINT}/api/${endpoint}?search=${searchText}`,
+    );
+    if (!response.ok) return [];
+    const result = await response.json();
+    return (
+      result?.data?.map((item: any) => ({
+        label: item?.name,
+        value: item?.id,
+      })) || []
+    );
+  };
+
   const handleContinue = () => {
     // UPDATED: Passing IDs to the parent flow
     const data = {
@@ -93,6 +178,8 @@ const FormTemplate = ({
       colorId: searchQuery.colorId,
       specs: searchQuery.specs,
       specsId: searchQuery.specsId,
+      grade: searchQuery.grade,
+      gradeId: searchQuery.gradeId,
       condition: condition,
       currency: currency,
       price: price,
@@ -105,43 +192,58 @@ const FormTemplate = ({
     onNext(data);
   };
 
-  const handleApiSearch = async (field: string, text: string) => {
-    // Reset ID when user types manually to ensure we don't send a stale ID
-    setSearchQuery((prev) => ({
-      ...prev,
-      [field]: text,
-      [`${field}Id`]: null,
-    }));
+  const handleApiSearch = async (
+    field: string,
+    text: string,
+    options?: { resetId?: boolean; allowEmpty?: boolean },
+  ) => {
+    const shouldResetId = options?.resetId !== false;
+    const allowEmpty = options?.allowEmpty === true;
 
-    if (text.length < 1) {
+    if (shouldResetId) {
+      // Reset ID when user types manually to ensure we don't send a stale ID
+      setSearchQuery((prev) => ({
+        ...prev,
+        [field]: text,
+        [`${field}Id`]: null,
+      }));
+    }
+
+    const query = text.trim();
+    if (query.length < 1 && !allowEmpty) {
       setShowDropdown(null);
       return;
     }
 
     setLoadingField(field);
     try {
-      let endpoint =
-        field === "model"
-          ? "selection/products"
-          : `selections/${field === "specs" ? "specs" : field + "s"}`;
-
-      if (field === "storage") endpoint = "selections/storage";
-
-      const response = await fetch(
-        `${CONFIG.API_ENDPOINT}/api/${endpoint}?search=${text}`,
-      );
-      if (response.ok) {
-        const result = await response.json();
-        const formatted = result?.data?.map((item: any) => ({
-          label: item?.name,
-          value: item?.id, // This is the ID we need
-        }));
-
-        if (field === "model") setModels(formatted);
-        else if (field === "storage") setStorages(formatted);
+      if (field === "model") {
+        const response = await fetch(
+          `${CONFIG.API_ENDPOINT}/api/selection/products?search=${query}`,
+        );
+        if (response.ok) {
+          const result = await response.json();
+          const formatted =
+            result?.data?.map((item: any) => ({
+              label: item?.name,
+              value: item?.id,
+              colors: item?.colors ?? item?.color ?? item?.colours,
+              storages: item?.storages ?? item?.storage,
+            })) || [];
+          setModels(formatted);
+          setShowDropdown(field);
+        }
+      } else if (
+        field === "storage" ||
+        field === "color" ||
+        field === "specs" ||
+        field === "grade"
+      ) {
+        const formatted = await fetchSelectionOptions(field, query);
+        if (field === "storage") setStorages(formatted);
         else if (field === "color") setColorsData(formatted);
         else if (field === "specs") setSpecsData(formatted);
-
+        else if (field === "grade") setGradesData(formatted);
         setShowDropdown(field);
       }
     } catch (error) {
@@ -152,28 +254,90 @@ const FormTemplate = ({
   };
 
   // UPDATED: Properly stores label and value (ID)
-  const selectItem = (field: string, item: any) => {
+  const selectItem = async (field: string, item: SelectOption) => {
+    const isCustom = item?.isCustom === true;
+    const nextValue = isCustom ? null : item?.value ?? null;
+
     setSearchQuery((prev) => ({
       ...prev,
       [field]: item.label,
-      [`${field}Id`]: item.value,
+      [`${field}Id`]: nextValue,
     }));
     setShowDropdown(null);
+
+    if (field === "model") {
+      const productColors = normalizeCsvOptions(item?.colors);
+      const productStorages = normalizeCsvOptions(item?.storages);
+
+      if (productColors.length > 0) {
+        setColorsData(
+          productColors.map((value) => ({
+            label: value,
+            value,
+            isCustom: true,
+          })),
+        );
+      } else {
+        const fallbackColors = await fetchSelectionOptions("color", "");
+        setColorsData(fallbackColors);
+      }
+
+      if (productStorages.length > 0) {
+        setStorages(
+          productStorages.map((value) => ({
+            label: value,
+            value,
+            isCustom: true,
+          })),
+        );
+      } else {
+        const fallbackStorages = await fetchSelectionOptions("storage", "");
+        setStorages(fallbackStorages);
+      }
+
+      setSearchQuery((prev) => ({
+        ...prev,
+        storage: "",
+        storageId: null,
+        color: "",
+        colorId: null,
+      }));
+    }
   };
 
   // --- Image Handlers ---
   const pickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") return;
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsMultipleSelection: true,
-      selectionLimit: 8,
-      quality: 1,
-    });
-    if (!result.canceled) {
-      const newImages = result.assets.map((asset) => asset.uri);
-      setSelectedImages([...selectedImages, ...newImages].slice(0, 8));
+    try {
+      if (selectedImages.length >= 8) {
+        Alert.alert("Limit reached", "You can upload up to 8 photos.");
+        return;
+      }
+
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert(
+          "Permission required",
+          "Please allow Photos access from iPhone settings to upload images.",
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: true,
+        selectionLimit: Math.max(1, 8 - selectedImages.length),
+        quality: 1,
+      });
+
+      if (result.canceled || !result.assets?.length) return;
+
+      const newImages = result.assets
+        .map((asset) => asset.uri)
+        .filter(Boolean);
+      setSelectedImages((prev) => [...new Set([...prev, ...newImages])].slice(0, 8));
+    } catch (error) {
+      console.error("Image picker error:", error);
+      Alert.alert("Error", "Could not open photo library.");
     }
   };
 
@@ -187,8 +351,8 @@ const FormTemplate = ({
     setExtraDetails(updated);
   };
 
-  const renderDropdown = (field: string, data: any[]) => {
-    if (showDropdown !== field || data.length === 0) return null;
+  const renderDropdown = (field: string, data: SelectOption[]) => {
+    if (showDropdown !== field) return null;
     return (
       <View
         style={[
@@ -201,32 +365,40 @@ const FormTemplate = ({
           keyboardShouldPersistTaps="handled"
           style={{ maxHeight: 200 }}
         >
-          {data.map((item, index) => (
-            <TouchableOpacity
-              key={index}
-              style={[
-                styles.dropdownItem,
-                searchQuery[field as keyof typeof searchQuery] ===
-                  item.label && { backgroundColor: "#3B82F6" },
-              ]}
-              onPress={() => selectItem(field, item)}
-            >
-              <Text
-                style={[
-                  styles.dropdownText,
-                  {
-                    color:
-                      searchQuery[field as keyof typeof searchQuery] ===
-                      item.label
-                        ? "#FFF"
-                        : colors.text,
-                  },
-                ]}
-              >
-                {item.label}
+          {data.length === 0 ? (
+            <View style={styles.dropdownEmpty}>
+              <Text style={[styles.dropdownEmptyText, { color: colors.subText }]}>
+                Start typing to search
               </Text>
-            </TouchableOpacity>
-          ))}
+            </View>
+          ) : (
+            data.map((item, index) => (
+              <TouchableOpacity
+                key={index}
+                style={[
+                  styles.dropdownItem,
+                  searchQuery[field as keyof typeof searchQuery] ===
+                    item.label && { backgroundColor: "#3B82F6" },
+                ]}
+                onPress={() => selectItem(field, item)}
+              >
+                <Text
+                  style={[
+                    styles.dropdownText,
+                    {
+                      color:
+                        searchQuery[field as keyof typeof searchQuery] ===
+                        item.label
+                          ? "#FFF"
+                          : colors.text,
+                    },
+                  ]}
+                >
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+            ))
+          )}
         </ScrollView>
       </View>
     );
@@ -328,6 +500,16 @@ const FormTemplate = ({
               placeholder="Model"
               value={searchQuery.model}
               onChangeText={(t) => handleApiSearch("model", t)}
+              onFocus={() => {
+                if (models.length > 0) {
+                  setShowDropdown("model");
+                  return;
+                }
+                handleApiSearch("model", searchQuery.model, {
+                  resetId: false,
+                  allowEmpty: true,
+                });
+              }}
               style={[
                 styles.input,
                 {
@@ -354,6 +536,16 @@ const FormTemplate = ({
               placeholder="Storage"
               value={searchQuery.storage}
               onChangeText={(t) => handleApiSearch("storage", t)}
+              onFocus={() => {
+                if (storages.length > 0) {
+                  setShowDropdown("storage");
+                  return;
+                }
+                handleApiSearch("storage", searchQuery.storage, {
+                  resetId: false,
+                  allowEmpty: true,
+                });
+              }}
               style={[
                 styles.input,
                 {
@@ -385,7 +577,16 @@ const FormTemplate = ({
             {["New", "Used"].map((item) => (
               <TouchableOpacity
                 key={item}
-                onPress={() => setCondition(item)}
+                onPress={() => {
+                  setCondition(item);
+                  if (item === "New") {
+                    setSearchQuery((prev) => ({
+                      ...prev,
+                      grade: "",
+                      gradeId: null,
+                    }));
+                  }
+                }}
                 style={[
                   styles.conditionBtn,
                   condition === item && styles.activeConditionBtn,
@@ -402,6 +603,44 @@ const FormTemplate = ({
               </TouchableOpacity>
             ))}
           </View>
+
+          {condition === "Used" && (
+            <View style={[styles.inputWrapper, { marginTop: 15, marginBottom: 0 }]}>
+              <TextInput
+                placeholder="Grade"
+                value={searchQuery.grade}
+                onChangeText={(t) => handleApiSearch("grade", t)}
+                onFocus={() => {
+                  if (gradesData.length > 0) {
+                    setShowDropdown("grade");
+                    return;
+                  }
+                  handleApiSearch("grade", searchQuery.grade, {
+                    resetId: false,
+                    allowEmpty: true,
+                  });
+                }}
+                style={[
+                  styles.input,
+                  {
+                    borderColor:
+                      showDropdown === "grade" ? "#3B82F6" : colors.border,
+                    color: colors.text,
+                    backgroundColor: colors.inputBg,
+                  },
+                ]}
+                placeholderTextColor={colors.subText}
+              />
+              {loadingField === "grade" && (
+                <ActivityIndicator
+                  style={styles.loader}
+                  size="small"
+                  color="#3B82F6"
+                />
+              )}
+              {renderDropdown("grade", gradesData)}
+            </View>
+          )}
         </View>
 
         {/* Card 2: Pricing */}
@@ -474,6 +713,16 @@ const FormTemplate = ({
               placeholder="Color"
               value={searchQuery.color}
               onChangeText={(t) => handleApiSearch("color", t)}
+              onFocus={() => {
+                if (colorsData.length > 0) {
+                  setShowDropdown("color");
+                  return;
+                }
+                handleApiSearch("color", searchQuery.color, {
+                  resetId: false,
+                  allowEmpty: true,
+                });
+              }}
               style={[
                 styles.input,
                 {
@@ -493,6 +742,16 @@ const FormTemplate = ({
               placeholder="Specs"
               value={searchQuery.specs}
               onChangeText={(t) => handleApiSearch("specs", t)}
+              onFocus={() => {
+                if (specsData.length > 0) {
+                  setShowDropdown("specs");
+                  return;
+                }
+                handleApiSearch("specs", searchQuery.specs, {
+                  resetId: false,
+                  allowEmpty: true,
+                });
+              }}
               style={[
                 styles.input,
                 {
@@ -742,6 +1001,8 @@ const styles = StyleSheet.create({
     borderBottomColor: "#E2E8F0",
   },
   dropdownText: { fontSize: 16, fontWeight: "500" },
+  dropdownEmpty: { padding: 15 },
+  dropdownEmptyText: { fontSize: 14, fontWeight: "500" },
   conditionRow: { flexDirection: "row", borderRadius: 12, padding: 4 },
   conditionBtn: {
     flex: 1,

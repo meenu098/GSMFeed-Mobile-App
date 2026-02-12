@@ -38,6 +38,58 @@ const ProductDescAI = ({ listingData, onNext, onBack }: any) => {
     border: isDark ? "#334155" : "#E2E8F0",
   };
 
+  const products =
+    Array.isArray(listingData?.products) && listingData.products.length > 0
+      ? listingData.products
+      : [listingData];
+  const aiApiCandidates = [
+    `${CONFIG.APP_URL}/api/ai/product-description`,
+    `${CONFIG.API_ENDPOINT}/api/ai/product-description`,
+  ];
+
+  const mapTypeToTradingType = (type: string | undefined) => {
+    return type?.toLowerCase() === "buy" ? "WTB" : "WTS";
+  };
+
+  const mapCondition = (condition: string | undefined) => {
+    return condition?.toUpperCase() === "USED" ? "USED" : "NEW";
+  };
+
+  const toUploadFile = (uri: string, index: number) => {
+    const cleanUri = uri.split("?")[0] || uri;
+    const extension = cleanUri.split(".").pop()?.toLowerCase();
+    const mime =
+      extension === "png"
+        ? "image/png"
+        : extension === "webp"
+          ? "image/webp"
+          : "image/jpeg";
+    const name = `photo-${Date.now()}-${index}.${extension || "jpg"}`;
+    return { uri, name, type: mime } as any;
+  };
+
+  const parseAiSuggestions = (rawData: any): string[] => {
+    if (Array.isArray(rawData)) {
+      return rawData.map((item) => String(item)).filter(Boolean);
+    }
+
+    if (typeof rawData === "string") {
+      try {
+        const parsed = JSON.parse(rawData);
+        if (Array.isArray(parsed)) {
+          return parsed.map((item) => String(item)).filter(Boolean);
+        }
+      } catch {}
+      return rawData ? [rawData] : [];
+    }
+
+    if (rawData && typeof rawData === "object") {
+      return Object.values(rawData).map((item) => String(item)).filter(Boolean);
+    }
+
+    return [];
+  };
+
   /**
    * AI GENERATION LOGIC
    * Hits the AI service (Port 3000)
@@ -47,49 +99,71 @@ const ProductDescAI = ({ listingData, onNext, onBack }: any) => {
     setIsCompiling(true);
     setRecommendations([]);
 
-    // Build details string exactly like web snippet
-    const productDetails = [
-      listingData.condition && `Condition: ${listingData.condition}`,
-      listingData.grade && `Grade: ${listingData.grade}`,
-      listingData.model && `Model: ${listingData.model}`,
-      listingData.color && `Color: ${listingData.color}`,
-      listingData.storage && `Storage: ${listingData.storage}`,
-      listingData.specs && `Spec: ${listingData.specs}`,
-      listingData.quantity && `Quantity: ${listingData.quantity}`,
-      `Type: ${listingData.type === "Buy" ? "WTB" : "WTS"}`,
-    ]
-      .filter(Boolean)
-      .join(", ");
+    const productDetails = products
+      .map((product: any, index: number) => {
+        const details = [
+          product.condition && `Condition: ${product.condition}`,
+          product.grade && `Grade: ${product.grade}`,
+          product.model && `Model: ${product.model}`,
+          product.color && `Color: ${product.color}`,
+          product.storage && `Storage: ${product.storage}`,
+          product.specs && `Spec: ${product.specs}`,
+          product.quantity && `Quantity: ${product.quantity}`,
+          `Type: ${mapTypeToTradingType(product.type)}`,
+        ]
+          .filter(Boolean)
+          .join(", ");
+        return `Product ${index + 1}: ${details}`;
+      })
+      .join(" | ");
 
     try {
-      // Points to Port 3000 as identified in your remote address logs
-      const res = await fetch(
-        `http://192.168.1.178:3000/api/ai/product-description`,
-        {
+      let resolved = false;
+      let lastStatus = 0;
+
+      for (const aiUrl of aiApiCandidates) {
+        const res = await fetch(aiUrl, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+          },
           body: JSON.stringify({ productDetails, emotion }),
-        },
-      );
+        });
 
-      if (res.ok) {
+        lastStatus = res.status;
+        if (!res.ok) continue;
+
         const result = await res.json();
-        const data = result.data;
-
-        // Convert Laravel-style object to array for mapping
-        if (data && typeof data === "object" && !Array.isArray(data)) {
-          setRecommendations(Object.values(data) as string[]);
-        } else if (Array.isArray(data)) {
-          setRecommendations(data);
+        if (result?.success === false || result?.status === false) {
+          Alert.alert(
+            "AI Error",
+            result?.message || "Failed to generate AI descriptions.",
+          );
+          return;
         }
-      } else {
-        console.error("AI API returned error status:", res.status);
+
+        const suggestions = parseAiSuggestions(result?.data);
+        setRecommendations(suggestions);
+        if (suggestions.length > 0) {
+          setSelectedDesc(suggestions[0]);
+        } else {
+          Alert.alert("AI Error", "No descriptions were generated.");
+        }
+        resolved = true;
+        break;
+      }
+
+      if (!resolved) {
+        Alert.alert(
+          "AI API Not Found",
+          `Could not reach AI route. Last status: ${lastStatus}.`,
+        );
       }
     } catch (error) {
       console.error("AI Fetch Error:", error);
       Alert.alert(
         "Connection Error",
-        "Could not reach AI service on port 3000.",
+        "Could not reach AI service.",
       );
     } finally {
       setIsCompiling(false);
@@ -121,67 +195,95 @@ const ProductDescAI = ({ listingData, onNext, onBack }: any) => {
         });
       }
 
-      // 3. Product Mapping (Trading Feeds)
-      const index = 0;
-      shapedData.append(
-        `trading_feeds[${index}][type]`,
-        listingData.type?.toLowerCase() === "buy" ? "wtb" : "wts",
-      );
+      products.forEach((product: any, index: number) => {
+        const aiDescription =
+          selectedDesc || recommendations[0] || product?.remarks || "";
 
-      // CRITICAL FIX: Ensure product_id is sent. If missing, send product_name fallback.
-      if (listingData.modelId) {
         shapedData.append(
-          `trading_feeds[${index}][product_id]`,
-          String(listingData.modelId),
+          `trading_feeds[${index}][type]`,
+          mapTypeToTradingType(product.type),
         );
-      } else {
-        // Fallback if ID is missing (per your validation error)
+
+        if (product.modelId) {
+          shapedData.append(
+            `trading_feeds[${index}][product_id]`,
+            String(product.modelId),
+          );
+        } else {
+          shapedData.append(
+            `trading_feeds[${index}][product_name]`,
+            product.model || "",
+          );
+          shapedData.append(`trading_feeds[${index}][brand]`, "Apple");
+          shapedData.append(`trading_feeds[${index}][category]`, "Mobile Phones");
+        }
+
         shapedData.append(
-          `trading_feeds[${index}][product_name]`,
-          listingData.model,
+          `trading_feeds[${index}][condition]`,
+          mapCondition(product.condition),
         );
-        shapedData.append(`trading_feeds[${index}][brand]`, "Apple"); // You may want to make this dynamic
-        shapedData.append(`trading_feeds[${index}][category]`, "Mobile Phones");
-      }
+        if (String(product.condition || "").toLowerCase() === "used" && product.gradeId) {
+          shapedData.append(
+            `trading_feeds[${index}][grade_id]`,
+            String(product.gradeId),
+          );
+        }
+        shapedData.append(
+          `trading_feeds[${index}][storage_id]`,
+          String(product.storageId || ""),
+        );
+        shapedData.append(
+          `trading_feeds[${index}][color_id]`,
+          String(product.colorId || ""),
+        );
+        shapedData.append(
+          `trading_feeds[${index}][spec_id]`,
+          String(product.specsId || ""),
+        );
+        shapedData.append(
+          `trading_feeds[${index}][qty]`,
+          String(product.quantity || 1),
+        );
+        shapedData.append(
+          `trading_feeds[${index}][currency]`,
+          (product.currency || "usd").toLowerCase(),
+        );
+        shapedData.append(
+          `trading_feeds[${index}][price]`,
+          String(product.price || 0),
+        );
+        shapedData.append(
+          `trading_feeds[${index}][ai_description]`,
+          aiDescription,
+        );
 
-      // Use IDs for selections if they exist, otherwise use labels
-      shapedData.append(
-        `trading_feeds[${index}][condition]`,
-        listingData.condition?.toLowerCase(),
-      );
-      shapedData.append(
-        `trading_feeds[${index}][storage_id]`,
-        String(listingData.storageId || ""),
-      );
-      shapedData.append(
-        `trading_feeds[${index}][color_id]`,
-        String(listingData.colorId || ""),
-      );
-      shapedData.append(
-        `trading_feeds[${index}][spec_id]`,
-        String(listingData.specsId || ""),
-      );
+        if (Array.isArray(product.extraDetails)) {
+          product.extraDetails.forEach((detail: any, detailIndex: number) => {
+            const label = detail?.label || detail?.name;
+            const value = detail?.value;
+            if (!label && !value) return;
+            shapedData.append(
+              `trading_feeds[${index}][extra_details][${detailIndex}][name]`,
+              String(label || ""),
+            );
+            shapedData.append(
+              `trading_feeds[${index}][extra_details][${detailIndex}][value]`,
+              String(value || ""),
+            );
+          });
+        }
 
-      // Pricing & Quantity
-      shapedData.append(
-        `trading_feeds[${index}][qty]`,
-        String(listingData.quantity || 1),
-      );
-      shapedData.append(
-        `trading_feeds[${index}][currency]`,
-        (listingData.currency || "usd").toLowerCase(),
-      );
-      shapedData.append(
-        `trading_feeds[${index}][price]`,
-        String(listingData.price || 0),
-      );
-      shapedData.append(
-        `trading_feeds[${index}][ai_description]`,
-        selectedDesc,
-      );
-
-      // 4. Extra Details & 5. Images (Keep your existing logic for these)
-      // ... [existing logic for extraDetails and images] ...
+        if (Array.isArray(product.images)) {
+          product.images
+            .filter((uri: string) => !!uri)
+            .forEach((uri: string, imageIndex: number) => {
+              shapedData.append(
+                `trading_feeds[${index}][images][]`,
+                toUploadFile(uri, imageIndex),
+              );
+            });
+        }
+      });
 
       // 6. Submit to API
       const res = await fetch(`${CONFIG.API_ENDPOINT}/api/feed/new-post`, {
@@ -195,7 +297,7 @@ const ProductDescAI = ({ listingData, onNext, onBack }: any) => {
 
       const result = await res.json();
       if (res.ok && result.status) {
-        onNext();
+        onNext({ selectedDesc });
       } else {
         // Improved error reporting
         const errorMsg = result.errors

@@ -1,9 +1,8 @@
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Dimensions,
   Image,
   ScrollView,
   StyleSheet,
@@ -16,22 +15,28 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import CONFIG from "../../../shared/config";
 import { useTheme } from "../../../shared/themeContext";
 
-const { width } = Dimensions.get("window");
-
 interface ListingSummaryProps {
   onNext: (data: any) => void; // Updated to pass data to parent
   onBack: () => void;
+  onAddMore?: () => void;
+  onEditProduct?: (index: number) => void;
   listingData: any;
 }
 
 const ListingSummary = ({
   onNext,
   onBack,
+  onAddMore,
+  onEditProduct,
   listingData,
 }: ListingSummaryProps) => {
   const { isDark } = useTheme();
-  const [remarks, setRemarks] = useState("");
-  const [selectedHashtags, setSelectedHashtags] = useState<string[]>([]);
+  const [remarks, setRemarks] = useState(listingData?.remarks || "");
+  const [selectedHashtags, setSelectedHashtags] = useState<string[]>(
+    Array.isArray(listingData?.hashtags) ? listingData.hashtags : [],
+  );
+  const [expandedProducts, setExpandedProducts] = useState<number[]>([0]);
+  const [currentUser, setCurrentUser] = useState<any>(null);
 
   // Hashtag States
   const [hashtagInput, setHashtagInput] = useState("");
@@ -48,6 +53,39 @@ const ListingSummary = ({
     inputBg: isDark ? "#1E293B" : "#FFFFFF",
     labelBg: isDark ? "#1E293B" : "#F1F5F9",
   };
+
+  const products = useMemo(() => {
+    if (Array.isArray(listingData?.products) && listingData.products.length > 0) {
+      return listingData.products;
+    }
+    if (listingData?.model || listingData?.price || listingData?.quantity) {
+      return [listingData];
+    }
+    return [];
+  }, [listingData]);
+
+  useEffect(() => {
+    setRemarks(listingData?.remarks || "");
+    setSelectedHashtags(
+      Array.isArray(listingData?.hashtags) ? listingData.hashtags : [],
+    );
+  }, [listingData]);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadUser = async () => {
+      try {
+        const userString = await AsyncStorage.getItem("user");
+        if (!userString || !mounted) return;
+        const parsed = JSON.parse(userString);
+        if (mounted) setCurrentUser(parsed);
+      } catch {}
+    };
+    loadUser();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   /**
    * Instead of submitting the post here, we pass the current state
@@ -144,13 +182,18 @@ const ListingSummary = ({
         {/* Profile Section */}
         <View style={styles.profileSection}>
           <Image
-            source={{ uri: "https://i.pravatar.cc/150?u=jose" }}
+            source={{
+              uri:
+                currentUser?.avatar_url ||
+                currentUser?.avatar ||
+                "https://i.pravatar.cc/150?u=user",
+            }}
             style={styles.avatar}
           />
           <View style={styles.profileInfo}>
             <View style={styles.nameRow}>
               <Text style={[styles.userName, { color: colors.text }]}>
-                Jose Albert Arnedo
+                {currentUser?.name || currentUser?.username || "User"}
               </Text>
               <MaterialCommunityIcons
                 name="check-decagram"
@@ -184,82 +227,145 @@ const ListingSummary = ({
           </View>
         </View>
 
-        {/* Product Card */}
-        <View
-          style={[
-            styles.productCard,
-            { backgroundColor: colors.card, borderColor: colors.border },
-          ]}
-        >
-          <View style={styles.productHeader}>
-            <Text style={[styles.productTitle, { color: colors.text }]}>
-              {listingData?.model || "Product Model"}
-            </Text>
-            <TouchableOpacity onPress={onBack}>
-              <Feather name="edit-3" size={18} color={colors.primary} />
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.detailList}>
-            <DetailItem
-              label="Price:"
-              value={`${listingData?.currency || "USD"} ${listingData?.price || "0"}`}
-              color="#10B981"
-              colors={colors}
-            />
-            <DetailItem
-              label="Condition:"
-              value={listingData?.condition}
-              colors={colors}
-            />
-            <DetailItem
-              label="Storage:"
-              value={listingData?.storage}
-              colors={colors}
-            />
-            <DetailItem
-              label="Color:"
-              value={listingData?.color || "Not Set"}
-              colors={colors}
-            />
-            <DetailItem
-              label="Spec:"
-              value={listingData?.specs || "Not Set"}
-              colors={colors}
-            />
-            <DetailItem
-              label="Quantity:"
-              value={`${listingData?.quantity || 0} Pcs`}
-              colors={colors}
-            />
-          </View>
-
-          <View style={styles.imageGallery}>
-            {listingData?.images?.length > 0 ? (
-              <Image
-                source={{ uri: listingData.images[0] }}
-                style={styles.productThumbnail}
-              />
-            ) : (
-              <View
-                style={[
-                  styles.productThumbnail,
-                  {
-                    backgroundColor: colors.labelBg,
-                    justifyContent: "center",
-                    alignItems: "center",
-                  },
-                ]}
-              >
-                <Feather name="image" size={24} color={colors.subText} />
+        {products.map((product, index) => {
+          const expanded = expandedProducts.includes(index);
+          return (
+            <View
+              key={`${product?.model || "product"}-${index}`}
+              style={[
+                styles.productCard,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+            >
+              <View style={styles.productHeader}>
+                <TouchableOpacity
+                  onPress={() =>
+                    setExpandedProducts((prev) =>
+                      prev.includes(index)
+                        ? prev.filter((i) => i !== index)
+                        : [...prev, index],
+                    )
+                  }
+                  style={styles.productCollapseBtn}
+                >
+                  <Text style={[styles.productTitle, { color: colors.text }]}>
+                    {product?.model || `Product ${index + 1}`}
+                  </Text>
+                  <Feather
+                    name={expanded ? "chevron-up" : "chevron-down"}
+                    size={18}
+                    color={colors.subText}
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => {
+                    if (onEditProduct) {
+                      onEditProduct(index);
+                    } else {
+                      onBack();
+                    }
+                  }}
+                >
+                  <Feather name="edit-3" size={18} color={colors.primary} />
+                </TouchableOpacity>
               </View>
-            )}
-          </View>
-        </View>
+
+              {expanded ? (
+                <>
+                  <View style={styles.detailList}>
+                    <DetailItem
+                      label="Price:"
+                      value={`${product?.currency || "USD"} ${product?.price || "0"}`}
+                      color="#10B981"
+                      colors={colors}
+                    />
+                    <DetailItem
+                      label="Condition:"
+                      value={product?.condition}
+                      colors={colors}
+                    />
+                    {String(product?.condition || "").toLowerCase() === "used" ? (
+                      <DetailItem
+                        label="Grade:"
+                        value={product?.grade || "Not Set"}
+                        colors={colors}
+                      />
+                    ) : null}
+                    <DetailItem
+                      label="Storage:"
+                      value={product?.storage}
+                      colors={colors}
+                    />
+                    <DetailItem
+                      label="Color:"
+                      value={product?.color || "Not Set"}
+                      colors={colors}
+                    />
+                    <DetailItem
+                      label="Spec:"
+                      value={product?.specs || "Not Set"}
+                      colors={colors}
+                    />
+                    <DetailItem
+                      label="Quantity:"
+                      value={`${product?.quantity || 0} Pcs`}
+                      colors={colors}
+                    />
+                  </View>
+
+                  <View style={styles.imageGallery}>
+                    {(() => {
+                      const imageUris = (
+                        Array.isArray(product?.images) ? product.images : []
+                      ).filter((uri: string) => !!uri);
+
+                      if (imageUris.length === 0) {
+                        return (
+                          <View
+                            style={[
+                              styles.productThumbnail,
+                              {
+                                backgroundColor: colors.labelBg,
+                                justifyContent: "center",
+                                alignItems: "center",
+                              },
+                            ]}
+                          >
+                            <Feather name="image" size={24} color={colors.subText} />
+                          </View>
+                        );
+                      }
+
+                      return (
+                        <ScrollView
+                          horizontal
+                          showsHorizontalScrollIndicator={false}
+                          contentContainerStyle={styles.imageRow}
+                        >
+                          {imageUris.map((uri: string, imageIndex: number) => (
+                            <Image
+                              key={`${uri}-${imageIndex}`}
+                              source={{ uri }}
+                              style={[
+                                styles.productThumbnail,
+                                imageIndex !== imageUris.length - 1 &&
+                                  styles.productThumbnailSpacing,
+                              ]}
+                            />
+                          ))}
+                        </ScrollView>
+                      );
+                    })()}
+                  </View>
+                </>
+              ) : null}
+            </View>
+          );
+        })}
 
         <TouchableOpacity
           style={[styles.addMoreBtn, { borderColor: colors.primary }]}
-          onPress={onBack}
+          onPress={onAddMore || onBack}
         >
           <Text style={[styles.addMoreText, { color: colors.primary }]}>
             Add more products
@@ -441,6 +547,13 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 15,
   },
+  productCollapseBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
   productTitle: { fontSize: 18, fontWeight: "800", flex: 1 },
   detailList: { marginBottom: 15 },
   detailItem: {
@@ -451,7 +564,9 @@ const styles = StyleSheet.create({
   detailLabel: { width: 100, fontSize: 14 },
   detailValue: { fontSize: 14, fontWeight: "700" },
   imageGallery: { marginTop: 10 },
+  imageRow: { paddingRight: 4 },
   productThumbnail: { width: 80, height: 80, borderRadius: 12 },
+  productThumbnailSpacing: { marginRight: 10 },
   addMoreBtn: {
     flexDirection: "row",
     justifyContent: "space-between",
