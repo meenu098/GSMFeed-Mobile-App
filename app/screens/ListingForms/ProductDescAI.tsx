@@ -22,6 +22,28 @@ const TONES = [
   { label: "Simple", value: "Simple" },
 ];
 
+const normalizeImageUris = (value: unknown): string[] => {
+  if (!value) return [];
+
+  if (Array.isArray(value)) {
+    return value
+      .map((item: any) => {
+        if (typeof item === "string") return item;
+        if (item && typeof item === "object" && typeof item.uri === "string") {
+          return item.uri;
+        }
+        return "";
+      })
+      .filter((uri) => uri.length > 0);
+  }
+
+  if (typeof value === "string") {
+    return value.trim().length > 0 ? [value] : [];
+  }
+
+  return [];
+};
+
 const ProductDescAI = ({ listingData, onNext, onBack }: any) => {
   const { isDark } = useTheme();
   const [selectedTone, setSelectedTone] = useState("Professional");
@@ -29,6 +51,7 @@ const ProductDescAI = ({ listingData, onNext, onBack }: any) => {
   const [isPosting, setIsPosting] = useState(false);
   const [recommendations, setRecommendations] = useState<string[]>([]);
   const [selectedDesc, setSelectedDesc] = useState("");
+  const submitButtonLabel = selectedDesc?.trim() ? "Post" : "Skip & Post";
 
   const colors = {
     bg: isDark ? "#0F172A" : "#F8FAFC",
@@ -273,16 +296,13 @@ const ProductDescAI = ({ listingData, onNext, onBack }: any) => {
           });
         }
 
-        if (Array.isArray(product.images)) {
-          product.images
-            .filter((uri: string) => !!uri)
-            .forEach((uri: string, imageIndex: number) => {
-              shapedData.append(
-                `trading_feeds[${index}][images][]`,
-                toUploadFile(uri, imageIndex),
-              );
-            });
-        }
+        const productImages = normalizeImageUris(product?.images);
+        productImages.forEach((uri: string, imageIndex: number) => {
+          shapedData.append(
+            `trading_feeds[${index}][images][]`,
+            toUploadFile(uri, imageIndex),
+          );
+        });
       });
 
       // 6. Submit to API
@@ -394,7 +414,7 @@ const ProductDescAI = ({ listingData, onNext, onBack }: any) => {
             <ActivityIndicator color="#FFF" />
           ) : (
             <>
-              <Text style={styles.postBtnText}>Skip & Post</Text>
+              <Text style={styles.postBtnText}>{submitButtonLabel}</Text>
               <Feather name="send" size={18} color="#FFF" />
             </>
           )}

@@ -232,10 +232,21 @@ export default function AdvancedSearchOverlay() {
       if (json.status) {
         setSearchResults(json.data);
       }
-    } catch (error) {
+    } catch {
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  const resolveProfileIdentifier = useCallback((item: any) => {
+    const identifier =
+      item?.username ??
+      item?.user_name ??
+      item?.id ??
+      item?.user_id ??
+      null;
+    if (identifier === null || identifier === undefined) return null;
+    return String(identifier);
   }, []);
 
   useEffect(() => {
@@ -306,7 +317,9 @@ export default function AdvancedSearchOverlay() {
           ) : (
             <FlatList
               data={searchResults}
-              keyExtractor={(item) => item.id.toString()}
+              keyExtractor={(item, index) =>
+                String(item?.id ?? item?.user_id ?? item?.username ?? index)
+              }
               contentContainerStyle={styles.listContent}
               keyboardShouldPersistTaps="handled"
               renderItem={({ item }) => (
@@ -319,10 +332,11 @@ export default function AdvancedSearchOverlay() {
                     },
                   ]}
                   onPress={() => {
-                    // NAVIGATE TO PROFILE PAGE
+                    const userId = resolveProfileIdentifier(item);
+                    if (!userId) return;
                     router.push({
-                      pathname: "/screens/UserProfile",
-                      params: { userId: item.id },
+                      pathname: "/screens/Profile",
+                      params: { userId },
                     });
                   }}
                 >
