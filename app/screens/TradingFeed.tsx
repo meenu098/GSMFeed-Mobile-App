@@ -520,7 +520,11 @@ const TradingFeed = () => {
         setDetailVisible(false);
         router.push({
           pathname: "/screens/MessageBubble",
-          params: { chatId: String(chatId), chatName },
+          params: {
+            chatId: String(chatId),
+            chatName,
+            chatAvatar: selectedFeed?.user?.avatar || "",
+          },
         });
         return;
       }
@@ -560,6 +564,7 @@ const TradingFeed = () => {
         params: {
           chatId: String(createdChatId),
           chatName,
+          chatAvatar: selectedFeed?.user?.avatar || "",
           initialMessage: content,
         },
       });

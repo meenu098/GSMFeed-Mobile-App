@@ -133,33 +133,31 @@ export default function BottomNav() {
                   <View
                     style={[
                       styles.avatarContainer,
-                      {
-                        borderColor: isActive
-                          ? themeColors.activeIcon
-                          : "transparent",
-                      },
+                      isActive && styles.avatarContainerActive,
                     ]}
                   >
-                    <Image
-                      key={profileImage}
-                      source={{
-                        uri:
-                          profileImage ||
-                          "https://ui-avatars.com/api/?name=User&background=3B66F5&color=fff",
-                      }}
-                      style={styles.avatarIcon}
-                      onLoadStart={() => !profileImage && setImgLoading(true)}
-                      onLoadEnd={() => setImgLoading(false)}
-                      onError={() => setImgLoading(false)}
-                    />
-                    {imgLoading && (
-                      <View style={styles.loaderOverlay}>
-                        <ActivityIndicator
-                          size="small"
-                          color={themeColors.activeIcon}
-                        />
-                      </View>
-                    )}
+                    <View style={styles.avatarMask}>
+                      <Image
+                        key={profileImage}
+                        source={{
+                          uri:
+                            profileImage ||
+                            "https://ui-avatars.com/api/?name=User&background=3B66F5&color=fff",
+                        }}
+                        style={styles.avatarIcon}
+                        onLoadStart={() => !profileImage && setImgLoading(true)}
+                        onLoadEnd={() => setImgLoading(false)}
+                        onError={() => setImgLoading(false)}
+                      />
+                      {imgLoading && (
+                        <View style={styles.loaderOverlay}>
+                          <ActivityIndicator
+                            size="small"
+                            color={themeColors.activeIcon}
+                          />
+                        </View>
+                      )}
+                    </View>
                   </View>
                 ) : (
                   item.Icon && (
@@ -210,13 +208,26 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    borderWidth: 2,
-    overflow: "hidden",
+    borderWidth: 0,
     backgroundColor: "#cbd5e1",
     justifyContent: "center",
     alignItems: "center",
   },
-  avatarIcon: { width: "100%", height: "100%", resizeMode: "cover" },
+  avatarContainerActive: {
+    borderWidth: 2,
+    borderColor: "#3B66F5",
+  },
+  avatarMask: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 17,
+    overflow: "hidden",
+  },
+  avatarIcon: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+  },
   loaderOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0,0,0,0.05)",

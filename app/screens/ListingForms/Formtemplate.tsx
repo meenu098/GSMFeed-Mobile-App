@@ -21,6 +21,7 @@ import CONFIG from "../../../shared/config";
 import { useTheme } from "../../../shared/themeContext";
 
 const { width } = Dimensions.get("window");
+const MAX_PHOTOS = 3;
 
 type SelectOption = {
   label: string;
@@ -36,6 +37,28 @@ interface FormTemplateProps {
   onNext: (data: any) => void;
   onBack: () => void;
 }
+
+const normalizeImageUris = (value: unknown): string[] => {
+  if (!value) return [];
+
+  if (Array.isArray(value)) {
+    return value
+      .map((item: any) => {
+        if (typeof item === "string") return item;
+        if (item && typeof item === "object" && typeof item.uri === "string") {
+          return item.uri;
+        }
+        return "";
+      })
+      .filter((uri) => uri.length > 0);
+  }
+
+  if (typeof value === "string") {
+    return value.trim().length > 0 ? [value] : [];
+  }
+
+  return [];
+};
 
 const FormTemplate = ({
   type: initialType,
@@ -82,7 +105,7 @@ const FormTemplate = ({
   const [currency, setCurrency] = useState(initialData?.currency || "USD");
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
   const [selectedImages, setSelectedImages] = useState<string[]>(
-    Array.isArray(initialData?.images) ? initialData.images : [],
+    normalizeImageUris(initialData?.images),
   );
   const [extraDetails, setExtraDetails] = useState<
     { label: string; value: string }[]
@@ -110,7 +133,7 @@ const FormTemplate = ({
     setPrice(initialData?.price ? String(initialData.price) : "");
     setQuantity(initialData?.quantity ? String(initialData.quantity) : "");
     setCurrency(initialData?.currency || "USD");
-    setSelectedImages(Array.isArray(initialData?.images) ? initialData.images : []);
+    setSelectedImages(normalizeImageUris(initialData?.images));
     setExtraDetails(
       Array.isArray(initialData?.extraDetails) ? initialData.extraDetails : [],
     );
@@ -184,7 +207,7 @@ const FormTemplate = ({
       currency: currency,
       price: price,
       quantity: quantity,
-      images: selectedImages,
+      images: [...selectedImages],
       extraDetails: extraDetails,
     };
 
@@ -308,8 +331,11 @@ const FormTemplate = ({
   // --- Image Handlers ---
   const pickImage = async () => {
     try {
-      if (selectedImages.length >= 8) {
-        Alert.alert("Limit reached", "You can upload up to 8 photos.");
+      if (selectedImages.length >= MAX_PHOTOS) {
+        Alert.alert(
+          "Limit reached",
+          `You can upload up to ${MAX_PHOTOS} photos.`,
+        );
         return;
       }
 
@@ -325,20 +351,24 @@ const FormTemplate = ({
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsMultipleSelection: true,
-        selectionLimit: Math.max(1, 8 - selectedImages.length),
+        selectionLimit: Math.max(1, MAX_PHOTOS - selectedImages.length),
         quality: 1,
       });
 
       if (result.canceled || !result.assets?.length) return;
 
-      const newImages = result.assets
-        .map((asset) => asset.uri)
-        .filter(Boolean);
-      setSelectedImages((prev) => [...new Set([...prev, ...newImages])].slice(0, 8));
+      const newImages = normalizeImageUris(result.assets);
+      setSelectedImages((prev) =>
+        Array.from(new Set([...prev, ...newImages])).slice(0, MAX_PHOTOS),
+      );
     } catch (error) {
       console.error("Image picker error:", error);
       Alert.alert("Error", "Could not open photo library.");
     }
+  };
+
+  const removeImage = (index: number) => {
+    setSelectedImages((prev) => prev.filter((_, idx) => idx !== index));
   };
 
   const updateDetailField = (
@@ -836,9 +866,15 @@ const FormTemplate = ({
             <Text style={[styles.sectionTitle, { color: colors.text }]}>
               Photos
             </Text>
-            <Text style={styles.photoCount}>{selectedImages.length}/8</Text>
+            <Text style={styles.photoCount}>
+              {selectedImages.length}/{MAX_PHOTOS}
+            </Text>
           </View>
-          <View style={styles.photoRow}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.photoStrip}
+          >
             <TouchableOpacity
               style={[
                 styles.addPhotoBox,
@@ -852,32 +888,37 @@ const FormTemplate = ({
               <Feather name="camera" size={24} color="#3B82F6" />
               <Text style={styles.addPhotoText}>Add</Text>
             </TouchableOpacity>
-            {[0, 1, 2].map((i) => (
+
+            {selectedImages.map((uri, index) => (
               <View
-                key={i}
+                key={`${uri}-${index}`}
                 style={[
-                  styles.emptyPhotoBox,
+                  styles.selectedPhotoBox,
                   {
-                    backgroundColor: isDark ? "#0F172A" : "#F8FAFC",
-                    borderColor: colors.border,
+                    backgroundColor: colors.inputBg,
                   },
                 ]}
               >
-                {selectedImages[i] ? (
-                  <Image
-                    source={{ uri: selectedImages[i] }}
-                    style={styles.imagePreview}
+                <Image source={{ uri }} style={styles.imagePreview} />
+                <TouchableOpacity
+                  onPress={() => removeImage(index)}
+                  style={styles.removePhotoBtn}
+                >
+                  <MaterialCommunityIcons
+                    name="close-circle"
+                    size={20}
+                    color="#EF4444"
                   />
-                ) : (
-                  <Feather
-                    name="image"
-                    size={24}
-                    color={isDark ? "#334155" : "#E2E8F0"}
-                  />
-                )}
+                </TouchableOpacity>
               </View>
             ))}
-          </View>
+          </ScrollView>
+
+          {selectedImages.length === 0 ? (
+            <Text style={[styles.photoHint, { color: colors.subText }]}>
+              {`You can select up to ${MAX_PHOTOS} photos.`}
+            </Text>
+          ) : null}
         </View>
 
         <TouchableOpacity onPress={handleContinue} style={styles.continueBtn}>
@@ -1065,7 +1106,7 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   photoCount: { fontSize: 12, color: "#94A3B8", fontWeight: "600" },
-  photoRow: { flexDirection: "row", gap: 10 },
+  photoStrip: { alignItems: "center", paddingRight: 4 },
   addPhotoBox: {
     width: (width - 100) / 4,
     height: (width - 100) / 4,
@@ -1081,15 +1122,25 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     marginTop: 4,
   },
-  emptyPhotoBox: {
+  selectedPhotoBox: {
     width: (width - 100) / 4,
     height: (width - 100) / 4,
     borderRadius: 15,
-    borderWidth: 1.5,
+    marginLeft: 10,
     justifyContent: "center",
     alignItems: "center",
+    overflow: "hidden",
+    position: "relative",
   },
   imagePreview: { width: "100%", height: "100%", borderRadius: 15 },
+  removePhotoBtn: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+    backgroundColor: "rgba(255,255,255,0.9)",
+    borderRadius: 12,
+  },
+  photoHint: { marginTop: 10, fontSize: 12, fontWeight: "500" },
   continueBtn: {
     height: 60,
     backgroundColor: "#3B82F6",

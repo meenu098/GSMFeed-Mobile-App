@@ -43,6 +43,13 @@ const { width } = Dimensions.get("window");
 const COVER_FALLBACK = require("../../assets/common/big-earth.png");
 const CARD_WIDTH = width - 30;
 const IMAGE_WIDTH = CARD_WIDTH - 30;
+const POST_MIN_ASPECT_RATIO = 4 / 5; // Instagram portrait floor
+const POST_MAX_ASPECT_RATIO = 1.91; // Instagram landscape ceiling
+
+const clampPostAspectRatio = (value: number) => {
+  if (!Number.isFinite(value) || value <= 0) return 1;
+  return Math.min(Math.max(value, POST_MIN_ASPECT_RATIO), POST_MAX_ASPECT_RATIO);
+};
 
 const REACTION_TYPES = [
   { title: "like", Icon: LikeIcon, color: "#3B66F5" },
@@ -371,6 +378,9 @@ const PostItem = ({ item, theme, onSave }: any) => {
   const [activeCommentPickerId, setActiveCommentPickerId] = useState<string | null>(
     null,
   );
+  const [mediaAspectRatios, setMediaAspectRatios] = useState<
+    Record<number, number>
+  >({});
 
   // Parse reaction count safely
   const initialTotal =
@@ -391,12 +401,48 @@ const PostItem = ({ item, theme, onSave }: any) => {
   const mediaUrls = tradingData.images || item.media || [];
   const postId = item.main_post_id ?? item.id;
   const pageLink = `${CONFIG.APP_URL}/feed/post/${postId}`;
+  const getMediaAspectRatio = useCallback(
+    (index: number) => mediaAspectRatios[index] || mediaAspectRatios[0] || 1,
+    [mediaAspectRatios],
+  );
+  const activeMediaHeight = IMAGE_WIDTH / getMediaAspectRatio(activeIndex);
 
   const handleProfilePress = () => {
     const username = author?.username || author?.user_name || author?.id;
     if (!username) return;
     router.push({ pathname: "/screens/Profile", params: { userId: username } });
   };
+
+  useEffect(() => {
+    let active = true;
+    const urls: string[] = item.trading_feeds?.[0]?.images || item.media || [];
+    setActiveIndex(0);
+    setMediaAspectRatios({});
+
+    urls.forEach((url: string, index: number) => {
+      if (!url) return;
+      Image.getSize(
+        url,
+        (mediaWidth, mediaHeight) => {
+          if (!active) return;
+          const ratio =
+            mediaWidth > 0 && mediaHeight > 0 ? mediaWidth / mediaHeight : 1;
+          setMediaAspectRatios((prev) => ({
+            ...prev,
+            [index]: clampPostAspectRatio(ratio),
+          }));
+        },
+        () => {
+          if (!active) return;
+          setMediaAspectRatios((prev) => ({ ...prev, [index]: 1 }));
+        },
+      );
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [item]);
 
   // API: Record Interaction Stat
   const postInteractStatTrigger = useCallback(async () => {
@@ -738,7 +784,7 @@ const PostItem = ({ item, theme, onSave }: any) => {
   const renderMedia = () => {
     if (!mediaUrls || mediaUrls.length === 0) return null;
     return (
-      <View style={styles.imageWrapper}>
+      <View style={[styles.imageWrapper, { height: activeMediaHeight }]}>
         <FlatList
           data={mediaUrls}
           horizontal
@@ -747,13 +793,16 @@ const PostItem = ({ item, theme, onSave }: any) => {
           scrollEventThrottle={16}
           showsHorizontalScrollIndicator={false}
           keyExtractor={(_, idx) => `img-${item.id}-${idx}`}
-          renderItem={({ item: url }) => (
-            <Image
-              source={{ uri: url }}
-              style={styles.postImage}
-              resizeMode="cover"
-            />
-          )}
+          renderItem={({ item: url, index }) => {
+            const imageHeight = IMAGE_WIDTH / getMediaAspectRatio(index);
+            return (
+              <Image
+                source={{ uri: url }}
+                style={[styles.postImage, { height: imageHeight }]}
+                resizeMode="cover"
+              />
+            );
+          }}
         />
         {mediaUrls.length > 1 ? (
           <View style={styles.pagination}>
@@ -1462,8 +1511,8 @@ const styles = StyleSheet.create({
   specItem: { marginRight: 15 },
   specLabel: { color: "#94a3b8", fontSize: 12 },
   specValue: { color: "#3B66F5", fontWeight: "bold" },
-  imageWrapper: { marginTop: 15, borderRadius: 15, overflow: "hidden" },
-  postImage: { width: IMAGE_WIDTH, height: 260 },
+  imageWrapper: { marginTop: 15, borderRadius: 15, overflow: "hidden", width: "100%" },
+  postImage: { width: IMAGE_WIDTH },
   pagination: {
     position: "absolute",
     bottom: 10,

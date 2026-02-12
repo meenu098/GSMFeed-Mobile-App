@@ -23,6 +23,25 @@ interface ListingSummaryProps {
   listingData: any;
 }
 
+const normalizeImageUris = (value: unknown): string[] => {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value
+      .map((item: any) => {
+        if (typeof item === "string") return item;
+        if (item && typeof item === "object" && typeof item.uri === "string") {
+          return item.uri;
+        }
+        return "";
+      })
+      .filter((uri) => uri.length > 0);
+  }
+  if (typeof value === "string") {
+    return value.trim().length > 0 ? [value] : [];
+  }
+  return [];
+};
+
 const ListingSummary = ({
   onNext,
   onBack,
@@ -315,9 +334,7 @@ const ListingSummary = ({
 
                   <View style={styles.imageGallery}>
                     {(() => {
-                      const imageUris = (
-                        Array.isArray(product?.images) ? product.images : []
-                      ).filter((uri: string) => !!uri);
+                      const imageUris = normalizeImageUris(product?.images);
 
                       if (imageUris.length === 0) {
                         return (

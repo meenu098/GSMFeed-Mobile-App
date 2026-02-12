@@ -121,7 +121,6 @@ export default function SettingsScreen() {
             <Text style={[styles.headerTitle, { color: theme.text }]}>
               {username}
             </Text>
-            <Feather name="chevron-down" size={20} color={theme.text} />
           </TouchableOpacity>
         </View>
 
