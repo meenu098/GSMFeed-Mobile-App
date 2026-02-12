@@ -6,9 +6,9 @@ import {
 } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEventListener } from "expo";
-import { useVideoPlayer, VideoSource, VideoView } from "expo-video";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
+import { useVideoPlayer, VideoSource, VideoView } from "expo-video";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -44,6 +44,12 @@ import { AiIcon } from "../../components/icons/icons";
 import { useFeedData } from "../../hooks/useFeedData";
 import CONFIG from "../../shared/config";
 import { useTheme } from "../../shared/themeContext";
+import BroadcastSelection from "./BroadCastSelection";
+import BuyForm from "./ListingForms/BuyForm";
+import ListingSuccess from "./ListingForms/ListingSuccess";
+import ListingSummary from "./ListingForms/ListingSummary";
+import ProductDescAI from "./ListingForms/ProductDescAI";
+import SellForm from "./ListingForms/SellForm";
 
 const { width } = Dimensions.get("window");
 const CARD_WIDTH = width - 30;
@@ -70,78 +76,67 @@ const ADS_ITEMS: AdItem[] = [
     id: 10,
     src: require("../../assets/ads/coolmix.mp4"),
     srcMobile: require("../../assets/ads/coolmix-mobile.mp4"),
-    link:
-      "https://api.whatsapp.com/send?phone=971555177420&text=Hi, I found your details on gsmfeed.com and would like to learn more about your company's services.",
+    link: "https://api.whatsapp.com/send?phone=971555177420&text=Hi, I found your details on gsmfeed.com and would like to learn more about your company's services.",
   },
   {
     id: 11,
     src: require("../../assets/ads/blessings.mp4"),
     srcMobile: require("../../assets/ads/blessings-mobile.mp4"),
-    link:
-      "https://api.whatsapp.com/send?phone=971555177420&text=Hi, I found your details on gsmfeed.com and would like to learn more about your company's services.",
+    link: "https://api.whatsapp.com/send?phone=971555177420&text=Hi, I found your details on gsmfeed.com and would like to learn more about your company's services.",
   },
   {
     id: 7,
     src: require("../../assets/ads/mobiking.mp4"),
     srcMobile: require("../../assets/ads/mobiking-mobile.mp4"),
-    link:
-      "https://api.whatsapp.com/send?phone=971555177420&text=Hi, I found your details on gsmfeed.com and would like to learn more about your company's services.",
+    link: "https://api.whatsapp.com/send?phone=971555177420&text=Hi, I found your details on gsmfeed.com and would like to learn more about your company's services.",
   },
   {
     id: 1,
     src: require("../../assets/ads/universal.mp4"),
     srcMobile: require("../../assets/ads/universal-mobile.mp4"),
-    link:
-      "https://api.whatsapp.com/send?phone=971553304244&text=Hi, I found your details on gsmfeed.com and would like to learn more about your company's services.",
+    link: "https://api.whatsapp.com/send?phone=971553304244&text=Hi, I found your details on gsmfeed.com and would like to learn more about your company's services.",
   },
   {
     id: 2,
     src: require("../../assets/ads/equals.mp4"),
     srcMobile: require("../../assets/ads/equals-mobile.mp4"),
-    link:
-      "https://api.whatsapp.com/send?phone=447554569233&text=Hi, I found your details on gsmfeed.com and would like to learn more about your company's services.",
+    link: "https://api.whatsapp.com/send?phone=447554569233&text=Hi, I found your details on gsmfeed.com and would like to learn more about your company's services.",
   },
   {
     id: 3,
     src: require("../../assets/ads/usedtrading.mp4"),
     srcMobile: require("../../assets/ads/usedtrading-mobile.mp4"),
-    link:
-      "https://api.whatsapp.com/send?phone=31636453528&text=Hi, I found your details on gsmfeed.com and would like to learn more about your company's services.",
+    link: "https://api.whatsapp.com/send?phone=31636453528&text=Hi, I found your details on gsmfeed.com and would like to learn more about your company's services.",
   },
   {
     id: 4,
     src: require("../../assets/ads/onerepair.mp4"),
     srcMobile: require("../../assets/ads/onerepair-mobile.mp4"),
-    link:
-      "https://api.whatsapp.com/send?phone=351918332588&text=Hi, I found your details on gsmfeed.com and would like to learn more about your company's services.",
+    link: "https://api.whatsapp.com/send?phone=351918332588&text=Hi, I found your details on gsmfeed.com and would like to learn more about your company's services.",
   },
   {
     id: 5,
     src: require("../../assets/ads/remobile.mp4"),
     srcMobile: require("../../assets/ads/remobile-mobile.mp4"),
-    link:
-      "https://api.whatsapp.com/send?phone=971509277746&text=Hi, I found your details on gsmfeed.com and would like to learn more about your company's services.",
+    link: "https://api.whatsapp.com/send?phone=971509277746&text=Hi, I found your details on gsmfeed.com and would like to learn more about your company's services.",
   },
   {
     id: 6,
     src: require("../../assets/ads/wecell.mp4"),
     srcMobile: require("../../assets/ads/wecell-mobile.mp4"),
-    link:
-      "https://api.whatsapp.com/send?phone=31642638686&text=Hi, I found your details on gsmfeed.com and would like to learn more about your company's services.",
+    link: "https://api.whatsapp.com/send?phone=31642638686&text=Hi, I found your details on gsmfeed.com and would like to learn more about your company's services.",
   },
   {
     id: 8,
     src: require("../../assets/ads/eurospares.mp4"),
     srcMobile: require("../../assets/ads/eurospares-mobile.mp4"),
-    link:
-      "https://api.whatsapp.com/send?phone=31641876946&text=Hi, I found your details on gsmfeed.com and would like to learn more about your company's services.",
+    link: "https://api.whatsapp.com/send?phone=31641876946&text=Hi, I found your details on gsmfeed.com and would like to learn more about your company's services.",
   },
   {
     id: 9,
     src: require("../../assets/ads/phonetronics.mp4"),
     srcMobile: require("../../assets/ads/phonetronics-mobile.mp4"),
-    link:
-      "https://api.whatsapp.com/send?phone=33650081718&text=Hi, I found your details on gsmfeed.com and would like to learn more about your company's services.",
+    link: "https://api.whatsapp.com/send?phone=33650081718&text=Hi, I found your details on gsmfeed.com and would like to learn more about your company's services.",
   },
 ];
 
@@ -156,10 +151,7 @@ const stripHtml = (value: string) => {
 };
 
 const escapeHtml = (value: string) =>
-  value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+  value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 const escapeRegex = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -191,9 +183,7 @@ const buildCommentHtml = (
 
   const hasReplyMention =
     replyUsername &&
-    new RegExp(`(^|\\s)@${escapeRegex(replyUsername)}(\\s|$)`, "i").test(
-      value,
-    );
+    new RegExp(`(^|\\s)@${escapeRegex(replyUsername)}(\\s|$)`, "i").test(value);
   if (replyUsername && !hasReplyMention) {
     const mentionId = mentionIdMap.get(replyUsername);
     const prefix = buildMentionAnchor(replyUsername, mentionId);
@@ -253,7 +243,6 @@ const AdsCarousel = ({
   );
 };
 
-
 const CommentItem = ({
   comment,
   theme,
@@ -286,8 +275,7 @@ const CommentItem = ({
   const author = comment?.author || {};
   const content = stripHtml(comment?.content || "");
   const commentId = String(comment?.id ?? "");
-  const childReplies =
-    replyMap?.[commentId] ?? comment?.comments ?? [];
+  const childReplies = replyMap?.[commentId] ?? comment?.comments ?? [];
   const totalReplies = comment?.total_comments || 0;
   const showViewReplies = totalReplies > 0 && childReplies.length === 0;
   const loadingReplies = !!replyLoadingMap?.[commentId];
@@ -370,9 +358,7 @@ const CommentItem = ({
             </Text>
             <TouchableOpacity
               activeOpacity={0.7}
-              onPress={() =>
-                onReact?.(comment, comment?.my_reaction || "like")
-              }
+              onPress={() => onReact?.(comment, comment?.my_reaction || "like")}
               onLongPress={() => onTogglePicker?.(commentId)}
               delayLongPress={250}
             >
@@ -404,7 +390,9 @@ const CommentItem = ({
                 ]}
               >
                 <ReactionChipIcon width={12} height={12} />
-                <Text style={[styles.commentReactionText, { color: theme.text }]}>
+                <Text
+                  style={[styles.commentReactionText, { color: theme.text }]}
+                >
                   {totalReactionsCount}
                 </Text>
               </View>
@@ -500,15 +488,16 @@ const PostItem = ({ item, theme, onSave }: any) => {
   const [replyLoadingMap, setReplyLoadingMap] = useState<
     Record<string, boolean>
   >({});
-  const [replyNextMap, setReplyNextMap] = useState<Record<string, string | null>>(
-    {},
-  );
+  const [replyNextMap, setReplyNextMap] = useState<
+    Record<string, string | null>
+  >({});
   const [replyPageMap, setReplyPageMap] = useState<Record<string, number>>({});
-  const [activeCommentPickerId, setActiveCommentPickerId] = useState<string | null>(
-    null,
-  );
+  const [activeCommentPickerId, setActiveCommentPickerId] = useState<
+    string | null
+  >(null);
+  const [aspectRatio, setAspectRatio] = useState(1);
+  // const mediaUrls = item.trading_feeds?.[0]?.images || item.media || [];
 
-  // Parse reaction count safely
   const initialTotal =
     typeof item.total_reactions === "object"
       ? item.total_reactions?.total || 0
@@ -518,9 +507,8 @@ const PostItem = ({ item, theme, onSave }: any) => {
     typeof item.total_comments === "object"
       ? item.total_comments?.total || 0
       : item.total_comments || 0;
-  const [commentCount, setCommentCount] = useState<number>(
-    initialCommentsCount,
-  );
+  const [commentCount, setCommentCount] =
+    useState<number>(initialCommentsCount);
 
   const tradingData = item.trading_feeds?.[0] || {};
   const author = item.author || {};
@@ -534,23 +522,34 @@ const PostItem = ({ item, theme, onSave }: any) => {
     router.push({ pathname: "/screens/Profile", params: { userId: username } });
   };
 
+  useEffect(() => {
+    if (mediaUrls.length > 0) {
+      Image.getSize(
+        mediaUrls[0],
+        (width, height) => {
+          setAspectRatio(width / height);
+        },
+        (error) => {
+          console.warn("Failed to get image size", error);
+        },
+      );
+    }
+  }, [mediaUrls]);
+
   // API: Record Interaction Stat
   const postInteractStatTrigger = useCallback(async () => {
     try {
       const userString = await AsyncStorage.getItem("user");
       if (!userString) return;
       const user = JSON.parse(userString);
-      await fetch(
-        `${CONFIG.API_ENDPOINT}/api/stats/post/post-interact`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${user.token}`,
-          },
-          body: JSON.stringify({ post_id: item.id }),
+      await fetch(`${CONFIG.API_ENDPOINT}/api/stats/post/post-interact`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${user.token}`,
         },
-      );
+        body: JSON.stringify({ post_id: item.id }),
+      });
     } catch (error) {}
   }, [item.id]);
 
@@ -656,48 +655,47 @@ const PostItem = ({ item, theme, onSave }: any) => {
     }
   }, [item.id]);
 
-  const fetchReplies = useCallback(
-    async (parentId: string, page = 1) => {
-      try {
-        setReplyLoadingMap((prev) => ({ ...prev, [parentId]: true }));
-        const userString = await AsyncStorage.getItem("user");
-        if (!userString) return;
-        const user = JSON.parse(userString);
-        const res = await fetch(
-          `${CONFIG.API_ENDPOINT}/api/feed/post/comments-get?page=${page}`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${user.token}`,
-            },
-            body: JSON.stringify({ post_id: parentId }),
+  const fetchReplies = useCallback(async (parentId: string, page = 1) => {
+    try {
+      setReplyLoadingMap((prev) => ({ ...prev, [parentId]: true }));
+      const userString = await AsyncStorage.getItem("user");
+      if (!userString) return;
+      const user = JSON.parse(userString);
+      const res = await fetch(
+        `${CONFIG.API_ENDPOINT}/api/feed/post/comments-get?page=${page}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${user.token}`,
           },
-        );
-        const result = await res.json();
-        if (result.status) {
-          const newReplies = result.data?.data || [];
-          setReplyMap((prev) => ({
-            ...prev,
-            [parentId]:
-              page === 1 ? newReplies : [...(prev[parentId] || []), ...newReplies],
-          }));
-          setReplyNextMap((prev) => ({
-            ...prev,
-            [parentId]: result.data?.next_page_url || null,
-          }));
-          setReplyPageMap((prev) => ({ ...prev, [parentId]: page }));
-        }
-      } catch (error) {
-      } finally {
-        setReplyLoadingMap((prev) => ({ ...prev, [parentId]: false }));
+          body: JSON.stringify({ post_id: parentId }),
+        },
+      );
+      const result = await res.json();
+      if (result.status) {
+        const newReplies = result.data?.data || [];
+        setReplyMap((prev) => ({
+          ...prev,
+          [parentId]:
+            page === 1
+              ? newReplies
+              : [...(prev[parentId] || []), ...newReplies],
+        }));
+        setReplyNextMap((prev) => ({
+          ...prev,
+          [parentId]: result.data?.next_page_url || null,
+        }));
+        setReplyPageMap((prev) => ({ ...prev, [parentId]: page }));
       }
-    },
-    [],
-  );
+    } catch (error) {
+    } finally {
+      setReplyLoadingMap((prev) => ({ ...prev, [parentId]: false }));
+    }
+  }, []);
 
   const updateCommentReaction = useCallback(
-    (list: any[], commentId: string, nextReaction: string) => {
+    (list: any[], commentId: string, nextReaction: string): any[] => {
       return list.map((c) => {
         if (String(c.id) === String(commentId)) {
           const prevReaction = c.my_reaction || "none";
@@ -743,7 +741,11 @@ const PostItem = ({ item, theme, onSave }: any) => {
         if (c.comments && Array.isArray(c.comments)) {
           return {
             ...c,
-            comments: updateCommentReaction(c.comments, commentId, nextReaction),
+            comments: updateCommentReaction(
+              c.comments,
+              commentId,
+              nextReaction,
+            ),
           };
         }
         return c;
@@ -765,9 +767,9 @@ const PostItem = ({ item, theme, onSave }: any) => {
         await fetch(
           `${CONFIG.API_ENDPOINT}/api/feed/post/react/${comment.id}`,
           {
-          method: "POST",
-          body: data,
-          headers: { Authorization: `Bearer ${user.token}` },
+            method: "POST",
+            body: data,
+            headers: { Authorization: `Bearer ${user.token}` },
           },
         );
 
@@ -887,7 +889,8 @@ const PostItem = ({ item, theme, onSave }: any) => {
           renderItem={({ item: url }) => (
             <Image
               source={{ uri: url }}
-              style={styles.postImage}
+              // Apply dynamic aspect ratio here
+              style={[styles.postImage, { aspectRatio: aspectRatio }]}
               resizeMode="cover"
             />
           )}
@@ -1040,7 +1043,11 @@ const PostItem = ({ item, theme, onSave }: any) => {
             style={styles.actionBtn}
             onPress={() => setShareVisible(true)}
           >
-            <Ionicons name="share-social-outline" size={20} color={theme.text} />
+            <Ionicons
+              name="share-social-outline"
+              size={20}
+              color={theme.text}
+            />
           </TouchableOpacity>
         </View>
         <TouchableOpacity
@@ -1073,14 +1080,19 @@ const PostItem = ({ item, theme, onSave }: any) => {
           setActiveCommentPickerId(null);
         }}
       >
-        <SafeAreaView style={styles.commentModalOverlay} edges={["top", "left", "right"]}>
+        <SafeAreaView
+          style={styles.commentModalOverlay}
+          edges={["top", "left", "right"]}
+        >
           <LinearGradient
             colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.25)", "rgba(0,0,0,0.4)"]}
             locations={[0, 0.2, 1]}
             style={styles.commentBackdrop}
             pointerEvents="none"
           />
-          <View style={[styles.commentModal, { backgroundColor: theme.cardBg }]}>
+          <View
+            style={[styles.commentModal, { backgroundColor: theme.cardBg }]}
+          >
             <View style={styles.commentHeader}>
               <Text style={[styles.commentTitle, { color: theme.text }]}>
                 Comments
@@ -1107,10 +1119,7 @@ const PostItem = ({ item, theme, onSave }: any) => {
                 </View>
               ) : comments.length === 0 ? (
                 <Text
-                  style={[
-                    styles.commentEmptyText,
-                    { color: theme.subText },
-                  ]}
+                  style={[styles.commentEmptyText, { color: theme.subText }]}
                 >
                   No comments yet.
                 </Text>
@@ -1195,9 +1204,13 @@ const PostItem = ({ item, theme, onSave }: any) => {
         onRequestClose={() => setShareVisible(false)}
       >
         <View style={styles.shareModalOverlay}>
-          <View style={[styles.shareModalCard, { backgroundColor: theme.cardBg }]}>
+          <View
+            style={[styles.shareModalCard, { backgroundColor: theme.cardBg }]}
+          >
             <View style={styles.shareHeader}>
-              <Text style={[styles.shareTitle, { color: theme.text }]}>Share</Text>
+              <Text style={[styles.shareTitle, { color: theme.text }]}>
+                Share
+              </Text>
               <TouchableOpacity onPress={() => setShareVisible(false)}>
                 <Feather name="x" size={20} color={theme.text} />
               </TouchableOpacity>
@@ -1269,6 +1282,14 @@ export default function NewsFeedScreen() {
   const { isDark } = useTheme();
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [adIndex, setAdIndex] = useState(0);
+  const [currentView, setCurrentView] = useState<
+    "feed" | "selection" | "sell" | "buy"
+  >("feed");
+  const [isModalVisible, setIsModalVisible] = useState(false);
+
+  const [step, setStep] = useState(1);
+  const [formData, setFormData] = useState<any>(null);
+
   const { feed, isLoading, fetchFeed } = useFeedData(
     `${CONFIG.API_ENDPOINT}/api/feed/posts`,
   );
@@ -1276,6 +1297,44 @@ export default function NewsFeedScreen() {
   useEffect(() => {
     fetchFeed(1);
   }, [fetchFeed]);
+
+  const handleBackToFeed = () => {
+    setCurrentView("feed");
+    setIsModalVisible(false);
+    setStep(1);
+    setFormData(null);
+  };
+
+  const handleFormNext = (data: any) => {
+    setFormData(data);
+    setStep(2);
+  };
+
+  const handleSummaryNext = (summaryData: any) => {
+    setFormData((prev: any) => ({ ...prev, ...summaryData }));
+    setStep(2.5);
+  };
+
+  const handleAINext = (finalData: any) => {
+    setFormData(finalData);
+    setStep(3);
+  };
+
+  const resetFlow = () => {
+    setStep(1);
+    setFormData(null);
+    setCurrentView("feed");
+  };
+
+  const handleOpenSelection = () => {
+    setCurrentView("selection");
+    setIsModalVisible(true);
+  };
+
+  const handleSelection = (type: "Sell" | "Buy") => {
+    setIsModalVisible(false);
+    setCurrentView(type === "Sell" ? "sell" : "buy");
+  };
 
   const theme = {
     bg: isDark ? "#050609" : "#F8FAFC",
@@ -1316,11 +1375,52 @@ export default function NewsFeedScreen() {
     } catch (error) {}
   }, []);
 
+  if (step === 3) {
+    return <ListingSuccess onFinish={resetFlow} />;
+  }
+
+  if (step === 2.5 && formData) {
+    return (
+      <ProductDescAI
+        listingData={formData}
+        onNext={handleAINext}
+        onBack={() => setStep(2)}
+      />
+    );
+  }
+
+  if (step === 2 && formData) {
+    return (
+      <ListingSummary
+        listingData={formData}
+        onNext={handleSummaryNext}
+        onBack={() => setStep(1)}
+      />
+    );
+  }
+
+  if (step === 1) {
+    if (currentView === "sell") {
+      return <SellForm onNext={handleFormNext} onBack={handleBackToFeed} />;
+    }
+    if (currentView === "buy") {
+      return <BuyForm onNext={handleFormNext} onBack={handleBackToFeed} />;
+    }
+  }
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
+      <BroadcastSelection
+        visible={isModalVisible}
+        onClose={handleBackToFeed}
+        onSelect={handleSelection}
+      />
       <View style={styles.topBar}>
-        <TouchableOpacity style={styles.iconBtn} activeOpacity={0.7}>
+        <TouchableOpacity
+          style={styles.iconBtn}
+          activeOpacity={0.7}
+          onPress={handleOpenSelection}
+        >
           <Feather name="plus" size={24} color={theme.text} />
         </TouchableOpacity>
         <Image
@@ -1477,8 +1577,13 @@ const styles = StyleSheet.create({
   specItem: { marginRight: 15 },
   specLabel: { color: "#94a3b8", fontSize: 12 },
   specValue: { color: "#3B66F5", fontWeight: "bold" },
-  imageWrapper: { marginTop: 15, borderRadius: 15, overflow: "hidden" },
-  postImage: { width: IMAGE_WIDTH, height: 260 },
+  imageWrapper: {
+    marginTop: 15,
+    borderRadius: 15,
+    overflow: "hidden",
+    width: "100%", // Ensure it takes full card width
+  },
+  postImage: { width: CARD_WIDTH - 30, height: 260 },
   pagination: {
     position: "absolute",
     bottom: 10,
