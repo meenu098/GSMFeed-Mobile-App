@@ -2,9 +2,10 @@ import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { format, isToday, parseISO } from "date-fns";
 import { useFocusEffect, useRouter } from "expo-router";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  AppState,
   FlatList,
   Image,
   RefreshControl,
@@ -12,6 +13,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  ViewToken,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -24,10 +26,17 @@ interface Chat {
   chat_name: string;
   chat_avatar: string | null;
   unread_messages: number;
-  last_message?: { content: string; sent_at: string };
+  last_message?: {
+    id?: string | number;
+    content?: string;
+    sent_at?: string;
+    sender_id?: number;
+  };
   members: any[];
   created_at: string;
 }
+
+const CHAT_LIST_POLL_MS = 8000;
 
 const ChatItem = ({ item, theme, currentUserId }: any) => {
   const router = useRouter();
@@ -106,6 +115,12 @@ export default function ChatScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollingInFlightRef = useRef(false);
+  const isScreenFocusedRef = useRef(false);
+  const visibleChatIdsRef = useRef<string[]>([]);
+  const latestChatsRef = useRef<Chat[]>([]);
+  const chatsRef = useRef<Chat[]>([]);
 
   // Search States
   const [isSearching, setIsSearching] = useState(false);
@@ -119,6 +134,67 @@ export default function ChatScreen() {
     border: isDark ? "#1B2331" : "#E2E8F0",
     primary: "#3B66F5",
   };
+
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 });
+
+  const shouldUpdateVisible = useCallback(
+    (nextChats: Chat[], visibleIds: string[], prevChats: Chat[]) => {
+      if (nextChats.length === 0) return prevChats.length !== 0;
+      if (prevChats.length === 0) return true;
+      if (visibleIds.length === 0) return true;
+
+      const prevById = new Map(
+        prevChats.map((chat) => [String(chat.id), chat] as const),
+      );
+      const nextById = new Map(
+        nextChats.map((chat) => [String(chat.id), chat] as const),
+      );
+
+      for (const id of visibleIds) {
+        const prevChat = prevById.get(id);
+        const nextChat = nextById.get(id);
+        if (!prevChat || !nextChat) return true;
+
+        if ((prevChat.unread_messages || 0) !== (nextChat.unread_messages || 0)) {
+          return true;
+        }
+
+        const prevMsg = prevChat.last_message;
+        const nextMsg = nextChat.last_message;
+        const prevKey = `${prevMsg?.id ?? ""}|${prevMsg?.sent_at ?? ""}|${prevMsg?.content ?? ""}`;
+        const nextKey = `${nextMsg?.id ?? ""}|${nextMsg?.sent_at ?? ""}|${nextMsg?.content ?? ""}`;
+        if (prevKey !== nextKey) return true;
+      }
+
+      const isAtTop =
+        visibleIds[0] &&
+        String(prevChats[0]?.id) === String(visibleIds[0]);
+      if (isAtTop && String(nextChats[0]?.id) !== String(prevChats[0]?.id)) {
+        return true;
+      }
+
+      return false;
+    },
+    [],
+  );
+
+  const onViewableItemsChanged = useRef(
+    ({ viewableItems }: { viewableItems: Array<ViewToken> }) => {
+      const ordered = viewableItems
+        .filter((v) => v.isViewable && (v.item as Chat)?.id != null)
+        .sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+
+      const ids = ordered.map((v) => String((v.item as Chat).id));
+      visibleChatIdsRef.current = ids;
+
+      const latest = latestChatsRef.current;
+      if (!latest.length) return;
+
+      if (shouldUpdateVisible(latest, ids, chatsRef.current)) {
+        setChats(latest);
+      }
+    },
+  );
 
   // Local Filter Logic
   const filteredChats = useMemo(() => {
@@ -134,7 +210,23 @@ export default function ChatScreen() {
     });
   }, [searchQuery, chats, currentUserId]);
 
+  useEffect(() => {
+    chatsRef.current = chats;
+  }, [chats]);
+
+  const applyChats = useCallback(
+    (nextChats: Chat[]) => {
+      latestChatsRef.current = nextChats;
+      if (shouldUpdateVisible(nextChats, visibleChatIdsRef.current, chatsRef.current)) {
+        setChats(nextChats);
+      }
+    },
+    [shouldUpdateVisible],
+  );
+
   const fetchChats = useCallback(async () => {
+    if (pollingInFlightRef.current) return;
+    pollingInFlightRef.current = true;
     try {
       const userString = await AsyncStorage.getItem("user");
       if (!userString) return;
@@ -156,19 +248,61 @@ export default function ChatScreen() {
 
       const json = await response.json();
       if (json.status) {
-        setChats(json.data);
+        const nextChats = Array.isArray(json.data) ? json.data : [];
+        applyChats(nextChats);
       }
     } catch (error) {
     } finally {
+      pollingInFlightRef.current = false;
       setLoading(false);
       setRefreshing(false);
     }
+  }, [applyChats]);
+
+  const startPolling = useCallback(() => {
+    if (pollingRef.current) return;
+    pollingRef.current = setInterval(() => {
+      fetchChats();
+    }, CHAT_LIST_POLL_MS);
+  }, [fetchChats]);
+
+  const stopPolling = useCallback(() => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
   }, []);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") {
+        if (isScreenFocusedRef.current) {
+          fetchChats();
+          startPolling();
+        }
+      } else {
+        stopPolling();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [fetchChats, startPolling, stopPolling]);
 
   useFocusEffect(
     useCallback(() => {
-      fetchChats();
-    }, [fetchChats]),
+      isScreenFocusedRef.current = true;
+      if (AppState.currentState === "active") {
+        fetchChats();
+        startPolling();
+      }
+
+      return () => {
+        isScreenFocusedRef.current = false;
+        stopPolling();
+      };
+    }, [fetchChats, startPolling, stopPolling]),
   );
 
   return (
@@ -241,6 +375,8 @@ export default function ChatScreen() {
           renderItem={({ item }) => (
             <ChatItem item={item} theme={theme} currentUserId={currentUserId} />
           )}
+          onViewableItemsChanged={onViewableItemsChanged.current}
+          viewabilityConfig={viewabilityConfig.current}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
