@@ -31,22 +31,33 @@ export default function UserRegistrationScreen2() {
   const { isDark } = useTheme();
   const { formData, updateFormData } = useRegistration();
 
-  const [dob, setDob] = useState(new Date(formData.dob || Date.now()));
+  // Date State
+  const [dobText, setDobText] = useState("");
+  const [dobDate, setDobDate] = useState(
+    new Date(formData.dob || "2000-01-01"),
+  );
   const [showPicker, setShowPicker] = useState(false);
+
+  // Selection States
   const [selectedCountry, setSelectedCountry] = useState<TCountryCode>(
     formData.country || "AE",
   );
+  const [selectedCompanyName, setSelectedCompanyName] = useState(
+    formData.company_name || "",
+  );
+  const [selectedPositionName, setSelectedPositionName] = useState("");
 
+  // Modal Visibility
   const [countryModal, setCountryModal] = useState(false);
+  const [companyModal, setCompanyModal] = useState(false);
+  const [roleModal, setRoleModal] = useState(false);
+
+  // Search States
   const [countrySearch, setCountrySearch] = useState("");
-  const [showRoleModal, setShowRoleModal] = useState(false);
+  const [companySearch, setCompanySearch] = useState("");
   const [roleSearch, setRoleSearch] = useState("");
 
-  const [company, setCompany] = useState(formData.company_name || "");
   const [companySuggestions, setCompanySuggestions] = useState<any[]>([]);
-  const [showCompanyList, setShowCompanyList] = useState(false);
-
-  const [position, setPosition] = useState(formData.position || "");
   const [roleOptions, setRoleOptions] = useState<any[]>([]);
   const [loading, setLoading] = useState({ companies: false, roles: false });
 
@@ -59,52 +70,69 @@ export default function UserRegistrationScreen2() {
       inputBg: isDark ? "rgba(255, 255, 255, 0.05)" : "#F1F5F9",
       primary: "#3B66F5",
       border: isDark ? "rgba(255,255,255,0.1)" : "#E2E8F0",
-      modalOverlay: "rgba(0,0,0,0.7)",
     },
+  };
+
+  // Format Date (DD/MM/YYYY)
+  const handleDateTyping = (text: string) => {
+    let cleaned = text.replace(/\D/g, "");
+    if (cleaned.length > 8) cleaned = cleaned.slice(0, 8);
+    let formatted = cleaned;
+    if (cleaned.length > 2)
+      formatted = `${cleaned.slice(0, 2)}/${cleaned.slice(2)}`;
+    if (cleaned.length > 4)
+      formatted = `${cleaned.slice(0, 2)}/${cleaned.slice(2, 4)}/${cleaned.slice(4)}`;
+    setDobText(formatted);
+    if (cleaned.length === 8) {
+      const day = parseInt(cleaned.slice(0, 2));
+      const month = parseInt(cleaned.slice(2, 4)) - 1;
+      const year = parseInt(cleaned.slice(4));
+      const dateObj = new Date(year, month, day);
+      if (!isNaN(dateObj.getTime())) setDobDate(dateObj);
+    }
   };
 
   useEffect(() => {
     const fetchRoles = async () => {
-      setLoading((prev) => ({ ...prev, roles: true }));
+      setLoading((p) => ({ ...p, roles: true }));
       try {
-        const response = await fetch(
-          `${CONFIG.API_ENDPOINT}/api/selections/roles`,
-        );
-        const result = await response.json();
+        const res = await fetch(`${CONFIG.API_ENDPOINT}/api/selections/roles`);
+        const result = await res.json();
         setRoleOptions(result?.data || []);
       } catch (err) {
         console.error(err);
       } finally {
-        setLoading((prev) => ({ ...prev, roles: false }));
+        setLoading((p) => ({ ...p, roles: false }));
       }
     };
     fetchRoles();
   }, []);
 
+  // API SEARCH Logic with Debounce
   useEffect(() => {
-    if (company.length < 2) {
+    if (companySearch.length < 1) {
       setCompanySuggestions([]);
       return;
     }
     const fetchCompanies = async () => {
-      setLoading((prev) => ({ ...prev, companies: true }));
+      setLoading((p) => ({ ...p, companies: true }));
       try {
-        const response = await fetch(
-          `${CONFIG.API_ENDPOINT}/api/selections/companies?search=${company}`,
+        const res = await fetch(
+          `${CONFIG.API_ENDPOINT}/api/selections/companies?search=${encodeURIComponent(companySearch)}`,
         );
-        const result = await response.json();
+        const result = await res.json();
         setCompanySuggestions(result?.data || []);
       } catch (err) {
         console.error(err);
       } finally {
-        setLoading((prev) => ({ ...prev, companies: false }));
+        setLoading((p) => ({ ...p, companies: false }));
       }
     };
-    const timeout = setTimeout(fetchCompanies, 500);
+    const timeout = setTimeout(fetchCompanies, 300);
     return () => clearTimeout(timeout);
-  }, [company]);
+  }, [companySearch]);
 
-  // Memoized Filters
+  // LOCAL FILTERS for responsive UI
   const filteredCountries = useMemo(() => {
     return Object.keys(countries).filter((code) =>
       countries[code as TCountryCode].name
@@ -119,17 +147,23 @@ export default function UserRegistrationScreen2() {
     );
   }, [roleSearch, roleOptions]);
 
+  // This ensures the list clears if the search term has no local matches before API returns
+  const filteredCompanyDisplay = useMemo(() => {
+    if (!companySearch) return companySuggestions;
+    return companySuggestions.filter((item) =>
+      item.name.toLowerCase().includes(companySearch.toLowerCase()),
+    );
+  }, [companySearch, companySuggestions]);
+
   const handleNext = () => {
     updateFormData({
-      dob: dob.toISOString().split("T")[0],
+      dob: dobDate.toISOString().split("T")[0],
       country: selectedCountry,
-      company_name: company,
-      position: position,
     });
     router.push("/screens/auth/Registration/stage-5");
   };
 
-  const renderItem = (
+  const renderModalItem = (
     label: string,
     icon: string | null,
     onPress: () => void,
@@ -180,7 +214,7 @@ export default function UserRegistrationScreen2() {
               Professional Info
             </Text>
             <Text style={[styles.subtitle, { color: theme.colors.subText }]}>
-              Complete your profile details
+              Complete your individual profile
             </Text>
           </View>
 
@@ -193,137 +227,113 @@ export default function UserRegistrationScreen2() {
               },
             ]}
           >
-            {/* DOB */}
             <View style={styles.inputGroup}>
               <Text style={[styles.label, { color: theme.colors.text }]}>
-                Date of Birth
+                Date of Birth (DD/MM/YYYY)
               </Text>
-              <TouchableOpacity
+              <View
                 style={[
                   styles.selector,
                   { backgroundColor: theme.colors.inputBg },
                 ]}
-                onPress={() => setShowPicker(true)}
               >
-                <Text style={{ color: theme.colors.text }}>
-                  {dob.toDateString()}
-                </Text>
-                <Ionicons
-                  name="calendar-outline"
-                  size={18}
-                  color={theme.colors.subText}
-                />
-              </TouchableOpacity>
-            </View>
-
-            {/* Country */}
-            <View style={styles.inputGroup}>
-              <Text style={[styles.label, { color: theme.colors.text }]}>
-                Country
-              </Text>
-              <TouchableOpacity
-                style={[
-                  styles.selector,
-                  { backgroundColor: theme.colors.inputBg },
-                ]}
-                onPress={() => setCountryModal(true)}
-              >
-                <Text style={{ color: theme.colors.text }}>
-                  {getEmojiFlag(selectedCountry)}{" "}
-                  {countries[selectedCountry].name}
-                </Text>
-                <Ionicons
-                  name="chevron-down"
-                  size={18}
-                  color={theme.colors.subText}
-                />
-              </TouchableOpacity>
-            </View>
-
-            {/* Company */}
-            <View style={styles.inputGroup}>
-              <Text style={[styles.label, { color: theme.colors.text }]}>
-                Company
-              </Text>
-              <View>
                 <TextInput
-                  style={[
-                    styles.input,
-                    {
-                      backgroundColor: theme.colors.inputBg,
-                      color: theme.colors.text,
-                    },
-                  ]}
-                  placeholder="Start typing company name..."
+                  style={[styles.flexInput, { color: theme.colors.text }]}
+                  placeholder="DD/MM/YYYY"
                   placeholderTextColor={theme.colors.subText}
-                  value={company}
-                  onChangeText={(text) => {
-                    setCompany(text);
-                    setShowCompanyList(true);
+                  keyboardType="number-pad"
+                  value={
+                    dobText ||
+                    (dobDate
+                      ? `${String(dobDate.getDate()).padStart(2, "0")}/${String(dobDate.getMonth() + 1).padStart(2, "0")}/${dobDate.getFullYear()}`
+                      : "")
+                  }
+                  onChangeText={handleDateTyping}
+                  maxLength={10}
+                />
+                <TouchableOpacity onPress={() => setShowPicker(true)}>
+                  <Ionicons
+                    name="calendar-outline"
+                    size={20}
+                    color={theme.colors.subText}
+                  />
+                </TouchableOpacity>
+              </View>
+              {showPicker && (
+                <DateTimePicker
+                  value={dobDate}
+                  mode="date"
+                  display="spinner"
+                  onChange={(e, d) => {
+                    setShowPicker(false);
+                    if (d) {
+                      setDobDate(d);
+                      setDobText("");
+                    }
                   }}
                 />
-                {loading.companies && (
-                  <ActivityIndicator
-                    style={styles.inlineLoader}
-                    size="small"
-                    color={theme.colors.primary}
-                  />
-                )}
-                {showCompanyList && companySuggestions.length > 0 && (
-                  <View
-                    style={[
-                      styles.dropdown,
-                      {
-                        backgroundColor: theme.colors.cardBg,
-                        borderColor: theme.colors.border,
-                      },
-                    ]}
-                  >
-                    {companySuggestions.map((item, idx) => (
-                      <TouchableOpacity
-                        key={idx}
-                        style={styles.dropdownItem}
-                        onPress={() => {
-                          setCompany(item.name);
-                          setShowCompanyList(false);
-                        }}
-                      >
-                        <Text style={{ color: theme.colors.text }}>
-                          {item.name}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
-              </View>
+              )}
             </View>
 
-            {/* Position */}
-            <View style={styles.inputGroup}>
-              <Text style={[styles.label, { color: theme.colors.text }]}>
-                Position / Role
-              </Text>
-              <TouchableOpacity
-                style={[
-                  styles.selector,
-                  { backgroundColor: theme.colors.inputBg },
-                ]}
-                onPress={() => setShowRoleModal(true)}
-              >
-                <Text
-                  style={{
-                    color: position ? theme.colors.text : theme.colors.subText,
-                  }}
-                >
-                  {position || "Select your role"}
+            {[
+              {
+                label: "Country",
+                value: `${getEmojiFlag(selectedCountry)} ${countries[selectedCountry].name}`,
+                icon: "chevron-down",
+                onPress: () => {
+                  setCountryModal(true);
+                  setCountrySearch("");
+                },
+              },
+              {
+                label: "Company",
+                value: selectedCompanyName || "Search existing company",
+                icon: "search",
+                onPress: () => {
+                  setCompanyModal(true);
+                  setCompanySearch("");
+                },
+              },
+              {
+                label: "Position / Role",
+                value: selectedPositionName || "Select your role",
+                icon: "briefcase-outline",
+                onPress: () => {
+                  setRoleModal(true);
+                  setRoleSearch("");
+                },
+              },
+            ].map((item, idx) => (
+              <View key={idx} style={styles.inputGroup}>
+                <Text style={[styles.label, { color: theme.colors.text }]}>
+                  {item.label}
                 </Text>
-                <Ionicons
-                  name="briefcase-outline"
-                  size={18}
-                  color={theme.colors.subText}
-                />
-              </TouchableOpacity>
-            </View>
+                <TouchableOpacity
+                  style={[
+                    styles.selector,
+                    { backgroundColor: theme.colors.inputBg },
+                  ]}
+                  onPress={item.onPress}
+                >
+                  <Text
+                    style={{
+                      color:
+                        item.value.includes("Search") ||
+                        item.value.includes("Select")
+                          ? theme.colors.subText
+                          : theme.colors.text,
+                    }}
+                  >
+                    {item.value}
+                  </Text>
+                  <Ionicons
+                    name={item.icon as any}
+                    size={18}
+                    color={theme.colors.subText}
+                  />
+                </TouchableOpacity>
+              </View>
+            ))}
 
             <View style={styles.navButtons}>
               <TouchableOpacity
@@ -334,15 +344,26 @@ export default function UserRegistrationScreen2() {
                   Back
                 </Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
+              <TouchableOpacity
+                style={[
+                  styles.nextButton,
+                  {
+                    opacity: formData.company_id && formData.position ? 1 : 0.6,
+                  },
+                ]}
+                onPress={handleNext}
+                disabled={!(formData.company_id && formData.position)}
+              >
                 <Text style={styles.nextText}>Next</Text>
               </TouchableOpacity>
             </View>
           </View>
-          <FooterLinks />
+          <View style={styles.linksWrapper}>
+            <FooterLinks />
+          </View>
         </ScrollView>
 
-        {/* UNIFORM MODAL COMPONENT */}
+        {/* Searchable Modals */}
         {[
           {
             visible: countryModal,
@@ -354,8 +375,17 @@ export default function UserRegistrationScreen2() {
             type: "country",
           },
           {
-            visible: showRoleModal,
-            setVisible: setShowRoleModal,
+            visible: companyModal,
+            setVisible: setCompanyModal,
+            title: "Select Company",
+            data: filteredCompanyDisplay,
+            search: companySearch,
+            setSearch: setCompanySearch,
+            type: "company",
+          },
+          {
+            visible: roleModal,
+            setVisible: setRoleModal,
             title: "Select Position",
             data: filteredRoles,
             search: roleSearch,
@@ -385,7 +415,6 @@ export default function UserRegistrationScreen2() {
                     />
                   </TouchableOpacity>
                 </View>
-
                 <View
                   style={[
                     styles.searchWrapper,
@@ -406,47 +435,58 @@ export default function UserRegistrationScreen2() {
                     ]}
                     value={m.search}
                     onChangeText={m.setSearch}
+                    autoFocus
                   />
+                  {m.type === "company" && loading.companies && (
+                    <ActivityIndicator
+                      size="small"
+                      color={theme.colors.primary}
+                    />
+                  )}
                 </View>
 
                 <FlatList
                   data={m.data}
                   keyExtractor={(item, index) => index.toString()}
-                  contentContainerStyle={{ paddingBottom: 20 }}
+                  ListEmptyComponent={() => (
+                    <View style={{ padding: 20, alignItems: "center" }}>
+                      <Text style={{ color: theme.colors.subText }}>
+                        {loading.companies
+                          ? "Searching..."
+                          : "No results found"}
+                      </Text>
+                    </View>
+                  )}
                   renderItem={({ item }) =>
                     m.type === "country"
-                      ? renderItem(
+                      ? renderModalItem(
                           countries[item as TCountryCode].name,
                           getEmojiFlag(item as TCountryCode),
                           () => {
                             setSelectedCountry(item as TCountryCode);
                             m.setVisible(false);
-                            setCountrySearch("");
                           },
                         )
-                      : renderItem(item.name, null, () => {
-                          setPosition(item.name);
-                          m.setVisible(false);
-                          setRoleSearch("");
-                        })
+                      : m.type === "company"
+                        ? renderModalItem(item.name, null, () => {
+                            updateFormData({
+                              company_id: item.id,
+                              company_name: item.name,
+                            });
+                            setSelectedCompanyName(item.name);
+                            m.setVisible(false);
+                          })
+                        : renderModalItem(item.name, null, () => {
+                            updateFormData({ position: item.id });
+                            setSelectedPositionName(item.name);
+                            m.setVisible(false);
+                          })
                   }
                 />
               </View>
             </View>
           </Modal>
         ))}
-
-        {showPicker && (
-          <DateTimePicker
-            value={dob}
-            mode="date"
-            display="spinner"
-            onChange={(event, date) => {
-              setShowPicker(false);
-              if (date) setDob(date);
-            }}
-          />
-        )}
       </View>
     </KeyboardAvoidingView>
   );
@@ -463,17 +503,7 @@ const styles = StyleSheet.create({
   textHeader: { alignItems: "center", marginBottom: 25 },
   title: { fontSize: 24, fontWeight: "800", letterSpacing: 0.5 },
   subtitle: { fontSize: 14, marginTop: 4, opacity: 0.8 },
-  card: {
-    width: "100%",
-    borderRadius: 24,
-    padding: 24,
-    borderWidth: 1,
-    elevation: 5,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-  },
+  card: { width: "100%", borderRadius: 24, padding: 24, borderWidth: 1 },
   inputGroup: { marginBottom: 20 },
   label: {
     fontSize: 13,
@@ -482,7 +512,6 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     opacity: 0.9,
   },
-  input: { height: 52, borderRadius: 14, paddingHorizontal: 16, fontSize: 15 },
   selector: {
     height: 52,
     borderRadius: 14,
@@ -491,20 +520,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
-  inlineLoader: { position: "absolute", right: 16, top: 16 },
-  dropdown: {
-    borderRadius: 14,
-    marginTop: 8,
-    padding: 8,
-    borderWidth: 1,
-    maxHeight: 200,
-    overflow: "hidden",
-  },
-  dropdownItem: {
-    padding: 14,
-    borderBottomWidth: 0.5,
-    borderBottomColor: "rgba(255,255,255,0.05)",
-  },
+  flexInput: { flex: 1, fontSize: 15, height: "100%" },
   navButtons: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -564,11 +580,5 @@ const styles = StyleSheet.create({
   listItemContent: { flexDirection: "row", alignItems: "center" },
   listIcon: { fontSize: 22, marginRight: 15 },
   listText: { fontSize: 16, fontWeight: "500" },
-  closeBtn: {
-    backgroundColor: "#3B66F5",
-    padding: 16,
-    borderRadius: 16,
-    alignItems: "center",
-    marginTop: 10,
-  },
+  linksWrapper: { alignItems: "center", marginTop: 150, width: "100%" },
 });

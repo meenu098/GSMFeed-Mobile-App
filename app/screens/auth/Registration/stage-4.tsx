@@ -296,7 +296,7 @@ export default function RegistrationScreen4() {
               style={[
                 styles.navButton,
                 {
-                  backgroundColor: canGoNext ? theme.colors.primary : "#CBD5E1",
+                  backgroundColor: canGoNext ? theme.colors.primary : "#64748B",
                 },
               ]}
               onPress={handleNext}

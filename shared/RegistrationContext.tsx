@@ -8,24 +8,29 @@ export const RegistrationProvider = ({
   children: React.ReactNode;
 }) => {
   const [formData, setFormData] = useState({
-    account_type: "",
-    company_category_id: null,
-    country: "",
-    email: "",
-    est_year: null,
+    account_type: "", // "business" or "individual"
     first_name: "",
-    isLead: false,
-    otp_token: "",
-    password: "",
+    last_name: "",
+    middle_name: "",
+    email: "",
     phone: "",
     phone_country_code: null,
-    position: "",
-    representative_email: "",
+    country: "",
+    username: "",
+    password: "",
+    isLead: false,
+    otp_token: "",
+    dob: "",
+    company_id: null,
+    position: null,
+    company_name: "",
+    company_category_id: null,
+    est_year: null,
     representative_first_name: "",
     representative_last_name: "",
+    representative_email: "",
     representative_phone: "",
     representative_phone_country_code: null,
-    username: "",
   });
 
   const updateFormData = (newData: any) => {

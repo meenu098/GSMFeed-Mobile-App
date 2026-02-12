@@ -129,7 +129,7 @@ export default function RegistrationScreen1() {
             onPress={() =>
               handleSelection(
                 "individual",
-                "/screens/auth/UserRegistration/stage-1",
+                "/screens/auth/UserRegistration/Userstage-1",
               )
             }
             activeOpacity={0.7}

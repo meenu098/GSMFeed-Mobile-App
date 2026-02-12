@@ -6,7 +6,7 @@ const BuyForm = ({
   onNext,
 }: {
   onBack: () => void;
-  onNext: () => void;
+  onNext: (data: any) => void;
 }) => {
   return <FormTemplate type="Buy" onBack={onBack} onNext={onNext} />;
 };

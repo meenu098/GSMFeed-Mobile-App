@@ -219,7 +219,7 @@ export default function RegistrationScreen5() {
               style={[
                 styles.navButton,
                 {
-                  backgroundColor: canGoNext ? theme.colors.primary : "#CBD5E1",
+                  backgroundColor: canGoNext ? theme.colors.primary : "#64748B",
                 },
               ]}
               onPress={handleNext}
@@ -229,7 +229,9 @@ export default function RegistrationScreen5() {
             </TouchableOpacity>
           </View>
         </View>
-        <FooterLinks />
+        <View style={styles.linksWrapper}>
+          <FooterLinks />
+        </View>
       </ScrollView>
     </View>
   );
@@ -285,4 +287,10 @@ const styles = StyleSheet.create({
   },
   backText: { fontWeight: "700" },
   nextText: { color: "#FFF", fontWeight: "700" },
+  linksWrapper: {
+    alignItems: "center",
+    marginTop: 270,
+    paddingBottom: 20,
+    width: "100%",
+  },
 });

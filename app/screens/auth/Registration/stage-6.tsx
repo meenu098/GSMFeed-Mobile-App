@@ -34,9 +34,8 @@ export default function RegistrationScreen6() {
   });
   const [suggestions, setSuggestions] = useState<string[]>([]);
 
-  const cleanedValue = (string: string) => {
-    return string.replace(/[^a-zA-Z0-9-_]/g, "").replace(/^[^a-zA-Z0-9]+/, "");
-  };
+  const cleanedValue = (string: string) =>
+    string.replace(/[^a-zA-Z0-9-_]/g, "").replace(/^[^a-zA-Z0-9]+/, "");
 
   useEffect(() => {
     const validateUsername = async () => {
@@ -56,18 +55,12 @@ export default function RegistrationScreen6() {
           },
         );
         const result = await res.json();
-
         setUsernameValidity({
           valid: result?.data?.is_available,
           loading: false,
         });
-
-        // Set suggestions if username is taken
-        if (!result?.data?.is_available && result?.data?.suggestions) {
+        if (!result?.data?.is_available && result?.data?.suggestions)
           setSuggestions(result.data.suggestions);
-        } else {
-          setSuggestions([]);
-        }
       } catch (err) {
         setUsernameValidity({ valid: false, loading: false });
       }
@@ -78,7 +71,39 @@ export default function RegistrationScreen6() {
 
   const handleSignUp = async () => {
     setSubmitting(true);
-    const finalPayload = { ...formData, isLead: false, otp_token: "" };
+    const isIndividual = formData.account_type === "individual";
+
+    let finalPayload: any = {
+      account_type: formData.account_type,
+      first_name: formData.first_name,
+      last_name: formData.last_name,
+      email: formData.email,
+      phone: formData.phone,
+      phone_country_code: Number(formData.phone_country_code),
+      country: formData.country,
+      username: formData.username,
+      password: formData.password,
+      isLead: false,
+      otp_token: "",
+    };
+
+    if (isIndividual) {
+      finalPayload.dob = formData.dob;
+      finalPayload.company_id = Number(formData.company_id);
+      finalPayload.position = Number(formData.position);
+      finalPayload.middle_name = formData.middle_name || "";
+    } else {
+      finalPayload.company_category_id = Number(formData.company_category_id);
+      finalPayload.est_year = Number(formData.est_year);
+      finalPayload.representative_first_name =
+        formData.representative_first_name;
+      finalPayload.representative_last_name = formData.representative_last_name;
+      finalPayload.representative_email = formData.representative_email;
+      finalPayload.representative_phone = formData.representative_phone;
+      finalPayload.representative_phone_country_code = Number(
+        formData.representative_phone_country_code,
+      );
+    }
 
     try {
       const response = await fetch(`${CONFIG.API_ENDPOINT}/api/auth/register`, {
@@ -92,11 +117,19 @@ export default function RegistrationScreen6() {
 
       const result = await response.json();
       if (response.ok) {
-        Alert.alert("Success", "Account created successfully!", [
-          { text: "OK", onPress: () => router.replace("/under-review") },
-        ]);
+        router.replace("/under-review");
+      } else if (result.message && result.message.includes("Redis")) {
+        Alert.alert(
+          "Success",
+          "Account created successfully! Your profile is now under review.",
+          [{ text: "OK", onPress: () => router.replace("/under-review") }],
+        );
       } else {
-        Alert.alert("Signup Failed", result.message || "Something went wrong.");
+        console.log("Validation Errors:", result.errors);
+        Alert.alert(
+          "Signup Failed",
+          result.message || "Please check your details.",
+        );
       }
     } catch (error) {
       Alert.alert("Error", "Could not connect to the server.");
@@ -118,20 +151,19 @@ export default function RegistrationScreen6() {
         colors={["#0A0A1A", "#1A0B2E", "#020205"]}
         style={StyleSheet.absoluteFillObject}
       />
-
       <ScrollView
         contentContainerStyle={[
           styles.scrollContent,
           { paddingTop: insets.top + 60 },
         ]}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         <Image
           source={require("../../../../assets/common/logo-dark.png")}
           style={styles.logo}
           resizeMode="contain"
         />
-
         <View style={styles.glassWrapper}>
           <BlurView
             intensity={Platform.OS === "ios" ? 40 : 100}
@@ -139,8 +171,7 @@ export default function RegistrationScreen6() {
             style={styles.blurContainer}
           >
             <View style={styles.innerCard}>
-              <Text style={styles.cardTitle}>Choose Username</Text>
-
+              <Text style={styles.cardTitle}>Set Username</Text>
               <View style={styles.inputGroup}>
                 <View style={styles.inputWrapper}>
                   <TextInput
@@ -176,8 +207,6 @@ export default function RegistrationScreen6() {
                     ) : null}
                   </View>
                 </View>
-
-                {/* SUGGESTIONS SECTION */}
                 {suggestions.length > 0 && (
                   <View style={styles.suggestionContainer}>
                     <Text style={styles.suggestionLabel}>Suggestions:</Text>
@@ -195,7 +224,6 @@ export default function RegistrationScreen6() {
                   </View>
                 )}
               </View>
-
               <View style={styles.agreementSection}>
                 <TouchableOpacity
                   onPress={() => setTermsAgreed(!termsAgreed)}
@@ -210,12 +238,24 @@ export default function RegistrationScreen6() {
                 </TouchableOpacity>
                 <View style={styles.termsTextContainer}>
                   <Text style={styles.termsText}>
-                    I agree to the <Text style={styles.linkText}>Terms</Text>{" "}
-                    and <Text style={styles.linkText}>Privacy Policy</Text>.
+                    I have read and agree to the{" "}
+                    <Text
+                      style={styles.linkText}
+                      onPress={() => router.push("/screens/Terms")}
+                    >
+                      Terms & Conditions
+                    </Text>{" "}
+                    and{" "}
+                    <Text
+                      style={styles.linkText}
+                      onPress={() => router.push("/screens/Privacy")}
+                    >
+                      Privacy Policy
+                    </Text>
+                    .
                   </Text>
                 </View>
               </View>
-
               <View style={styles.navButtons}>
                 <TouchableOpacity
                   onPress={() => router.back()}
@@ -239,21 +279,16 @@ export default function RegistrationScreen6() {
                   {submitting ? (
                     <ActivityIndicator color="#FFF" />
                   ) : (
-                    <Text
-                      style={[
-                        styles.signUpText,
-                        { opacity: canSubmit ? 1 : 0.5 },
-                      ]}
-                    >
-                      Sign Up
-                    </Text>
+                    <Text style={styles.signUpText}>Sign Up</Text>
                   )}
                 </TouchableOpacity>
               </View>
             </View>
           </BlurView>
         </View>
-        <FooterLinks />
+        <View style={styles.linksWrapper}>
+          <FooterLinks />
+        </View>
       </ScrollView>
     </View>
   );
@@ -335,4 +370,10 @@ const styles = StyleSheet.create({
     minWidth: 130,
   },
   signUpText: { color: "#FFFFFF", fontWeight: "700", fontSize: 16 },
+  linksWrapper: {
+    alignItems: "center",
+    marginTop: 310,
+    paddingBottom: 20,
+    width: "100%",
+  },
 });

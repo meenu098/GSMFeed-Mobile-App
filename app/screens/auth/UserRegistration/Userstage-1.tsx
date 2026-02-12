@@ -21,8 +21,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import FooterLinks from "../../../../components/FooterLinks";
 import CONFIG from "../../../../shared/config";
-import { useTheme } from "../../../../shared/themeContext";
 import { useRegistration } from "../../../../shared/RegistrationContext";
+import { useTheme } from "../../../../shared/themeContext";
 
 const { height } = Dimensions.get("window");
 
@@ -50,10 +50,9 @@ export default function UserRegistrationScreen1() {
     loading: false,
     message: "",
   });
-  const [nameValidity, setNameValidity] = useState({
-    valid: null as boolean | null,
-    loading: false,
-  });
+
+  // New state to track username generation status
+  const [isGeneratingUsername, setIsGeneratingUsername] = useState(false);
 
   const countryData = countries[selectedCountry] || countries["AE"];
 
@@ -72,7 +71,7 @@ export default function UserRegistrationScreen1() {
       );
   }, [searchQuery]);
 
-  // Email Validation API
+  // 1. Email Validation API
   useEffect(() => {
     const checkEmail = async () => {
       if (!email) {
@@ -111,7 +110,51 @@ export default function UserRegistrationScreen1() {
     return () => clearTimeout(timeout);
   }, [email]);
 
-  // Handle Next - Correctly parsing country code and storing names
+  // 2. Username Suggestion API - Triggered by Names
+  useEffect(() => {
+    const checkUsername = async () => {
+      // Only run if both names are provided
+      if (firstName.length < 2 || lastName.length < 2) return;
+
+      setIsGeneratingUsername(true);
+
+      // Construct a suggested username from names
+      const suggestedSlug = `${firstName.trim()}_${lastName.trim()}`
+        .toLowerCase()
+        .replace(/\s+/g, "");
+
+      try {
+        const response = await fetch(
+          `${CONFIG.API_ENDPOINT}/api/auth/validate/username`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username: suggestedSlug }),
+          },
+        );
+        const data = await response.json();
+
+        // If available, update context. If taken, backend typically returns suggestions.
+        if (data?.data?.is_available) {
+          updateFormData({ username: suggestedSlug });
+        } else if (
+          data?.data?.suggestions &&
+          data.data.suggestions.length > 0
+        ) {
+          // Pre-fill Stage 6 with the first available suggestion
+          updateFormData({ username: data.data.suggestions[0] });
+        }
+      } catch (err) {
+        console.error("Username generation error", err);
+      } finally {
+        setIsGeneratingUsername(false);
+      }
+    };
+
+    const timeout = setTimeout(checkUsername, 800);
+    return () => clearTimeout(timeout);
+  }, [firstName, lastName]);
+
   const handleNext = () => {
     const dialCodeRaw = countryData?.phone?.[0] || "0";
 
@@ -124,15 +167,15 @@ export default function UserRegistrationScreen1() {
       phone_country_code: parseInt(String(dialCodeRaw), 10),
     });
 
-    // Note: If names change, Screen 6 will re-generate username suggestions
-    router.push("/screens/auth/UserRegistration/stage-2");
+    router.push("/screens/auth/UserRegistration/Userstage-2");
   };
 
   const canGoNext =
     emailValidity.valid &&
     firstName.length > 1 &&
     lastName.length > 1 &&
-    phone.length > 5;
+    phone.length > 5 &&
+    !isGeneratingUsername;
 
   const theme = {
     colors: {
@@ -217,7 +260,6 @@ export default function UserRegistrationScreen1() {
             },
           ]}
         >
-          {/* Names Row */}
           <View style={styles.row}>
             <View style={[styles.inputGroup, { flex: 1, marginRight: 10 }]}>
               <Text style={[styles.label, { color: theme.colors.text }]}>
@@ -259,7 +301,6 @@ export default function UserRegistrationScreen1() {
             </View>
           </View>
 
-          {/* Contact Number */}
           <View style={styles.inputGroup}>
             <Text style={[styles.label, { color: theme.colors.text }]}>
               Contact Number
@@ -301,7 +342,6 @@ export default function UserRegistrationScreen1() {
             </View>
           </View>
 
-          {/* Email */}
           <View style={styles.inputGroup}>
             <Text style={[styles.label, { color: theme.colors.text }]}>
               Email Address
@@ -355,20 +395,24 @@ export default function UserRegistrationScreen1() {
               style={[
                 styles.navButton,
                 {
-                  backgroundColor: canGoNext ? theme.colors.primary : "#CBD5E1",
+                  backgroundColor: canGoNext ? theme.colors.primary : "#64748B",
                 },
               ]}
               onPress={handleNext}
               disabled={!canGoNext}
             >
-              <Text style={styles.nextButtonText}>Next</Text>
+              {isGeneratingUsername ? (
+                <ActivityIndicator color="#FFF" size="small" />
+              ) : (
+                <Text style={styles.nextButtonText}>Next</Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>
         <FooterLinks />
       </ScrollView>
 
-      {/* Modal Selection */}
+      {/* Modal Selection remains the same */}
       <Modal visible={isModalVisible} animationType="slide" transparent={true}>
         <View style={styles.modalOverlay}>
           <View
