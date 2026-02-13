@@ -20,6 +20,7 @@ import {
 } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import BottomNav from "../../components/BottomNav";
+import SkeletonLoader from "../../components/SkeletonLoader";
 import CONFIG from "../../shared/config";
 import { useTheme } from "../../shared/themeContext";
 
@@ -28,7 +29,7 @@ const { width } = Dimensions.get("window");
 export default function NotificationsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { isDark } = useTheme();
+  const { isDark, screenTheme } = useTheme();
 
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -37,14 +38,14 @@ export default function NotificationsScreen() {
   const [userToken, setUserToken] = useState<string | null>(null);
 
   const theme = {
-    background: isDark ? "#000000" : "#F8F9FA",
-    card: isDark ? "#1A1A1A" : "#FFFFFF",
-    header: isDark ? "#000000" : "#FFFFFF",
-    textPrimary: isDark ? "#FFFFFF" : "#1A1A1A",
-    textSecondary: isDark ? "#E0E0E0" : "#4A4A4A",
-    textTertiary: isDark ? "#9E9E9E" : "#757575",
-    primary: "#3B66F5",
-    danger: "#FF4D4D",
+    background: screenTheme.bg,
+    card: screenTheme.card,
+    header: screenTheme.bg,
+    textPrimary: screenTheme.text,
+    textSecondary: screenTheme.subText,
+    textTertiary: screenTheme.textTertiary,
+    primary: screenTheme.primary,
+    danger: screenTheme.danger,
     border: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)",
   };
 
@@ -267,35 +268,39 @@ export default function NotificationsScreen() {
           </View>
         </View>
 
-        <FlatList
-          data={notifications}
-          renderItem={renderItem}
-          keyExtractor={(item) => item.id.toString()}
-          contentContainerStyle={styles.listContent}
-          onRefresh={() => fetchNotifications(userToken!, true)}
-          refreshing={refreshing}
-          onEndReached={() => userToken && fetchNotifications(userToken)}
-          onEndReachedThreshold={0.5}
-          ListFooterComponent={() =>
-            loading && !refreshing ? (
-              <ActivityIndicator style={{ margin: 20 }} color={theme.primary} />
-            ) : null
-          }
-          ListEmptyComponent={
-            !loading && (
-              <View style={styles.emptyContainer}>
-                <MaterialCommunityIcons
-                  name="bell-off-outline"
-                  size={60}
-                  color={theme.textTertiary}
-                />
-                <Text style={{ color: theme.textSecondary, marginTop: 10 }}>
-                  No notifications yet
-                </Text>
-              </View>
-            )
-          }
-        />
+        {loading && notifications.length === 0 && !refreshing ? (
+          <SkeletonLoader variant="list" count={7} />
+        ) : (
+          <FlatList
+            data={notifications}
+            renderItem={renderItem}
+            keyExtractor={(item) => item.id.toString()}
+            contentContainerStyle={styles.listContent}
+            onRefresh={() => fetchNotifications(userToken!, true)}
+            refreshing={refreshing}
+            onEndReached={() => userToken && fetchNotifications(userToken)}
+            onEndReachedThreshold={0.5}
+            ListFooterComponent={() =>
+              loading && !refreshing ? (
+                <ActivityIndicator style={{ margin: 20 }} color={theme.primary} />
+              ) : null
+            }
+            ListEmptyComponent={
+              !loading && (
+                <View style={styles.emptyContainer}>
+                  <MaterialCommunityIcons
+                    name="bell-off-outline"
+                    size={60}
+                    color={theme.textTertiary}
+                  />
+                  <Text style={{ color: theme.textSecondary, marginTop: 10 }}>
+                    No notifications yet
+                  </Text>
+                </View>
+              )
+            }
+          />
+        )}
         <BottomNav />
       </View>
     </GestureHandlerRootView>

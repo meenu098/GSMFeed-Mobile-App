@@ -37,6 +37,7 @@ import LoveIcon from "../../assets/reaction/love.svg";
 import SadIcon from "../../assets/reaction/sad.svg";
 import WowIcon from "../../assets/reaction/wow.svg";
 import BottomNav from "../../components/BottomNav";
+import SkeletonLoader from "../../components/SkeletonLoader";
 import CONFIG from "../../shared/config";
 import { useTheme } from "../../shared/themeContext";
 
@@ -1095,9 +1096,7 @@ const PostItem = ({ item, theme, onSave, canDelete, onDeletePost }: any) => {
           style={[styles.descriptionText, { color: theme.text }]}
           numberOfLines={3}
         >
-          {item.content ||
-            tradingData.ai_description ||
-            "No description provided."}
+          {item.content || tradingData.ai_description}
         </Text>
         <View style={styles.hashtagRow}>
           {item.hashtags?.map((h: any) => (
@@ -1409,7 +1408,7 @@ const PostItem = ({ item, theme, onSave, canDelete, onDeletePost }: any) => {
 
 // --- MAIN PROFILE SCREEN ---
 export default function ProfileScreen() {
-  const { isDark } = useTheme();
+  const { screenTheme } = useTheme();
   const router = useRouter();
   const { userId } = useLocalSearchParams();
 
@@ -1420,16 +1419,7 @@ export default function ProfileScreen() {
   const [isFollowingProfile, setIsFollowingProfile] = useState(false);
   const [followActionLoading, setFollowActionLoading] = useState(false);
 
-  const theme = {
-    bg: isDark ? "#0B0E14" : "#F8FAFC",
-    card: isDark ? "#121721" : "#FFFFFF",
-    cardBg: isDark ? "#121721" : "#FFFFFF",
-    text: isDark ? "#F8FAFC" : "#0F172A",
-    subText: isDark ? "#94A3B8" : "#64748B",
-    primary: "#3B66F5",
-    border: isDark ? "#1B2331" : "#E2E8F0",
-    isDark,
-  };
+  const theme = screenTheme;
 
   const formatMediaUrl = (url?: string | null) => {
     if (!url) return null;
@@ -1636,11 +1626,7 @@ export default function ProfileScreen() {
   ]);
 
   if (loading)
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator color={theme.primary} size="large" />
-      </View>
-    );
+    return <SkeletonLoader variant="profilePage" withScroll={false} />;
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg }}>

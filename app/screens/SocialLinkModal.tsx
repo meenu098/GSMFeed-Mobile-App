@@ -11,7 +11,7 @@ import {
 import { useTheme } from "../../shared/themeContext";
 
 const SocialLinksModal = ({ visible, onClose, onSave, initialData }: any) => {
-  const { isDark } = useTheme();
+  const { screenTheme } = useTheme();
   const [platform, setPlatform] = useState("");
   const [username, setUsername] = useState("");
   const [link, setLink] = useState("");
@@ -39,12 +39,12 @@ const SocialLinksModal = ({ visible, onClose, onSave, initialData }: any) => {
   }, [initialData, visible]);
 
   const theme = {
-    card: isDark ? "#1E2530" : "#FFFFFF",
-    text: isDark ? "#F8FAFC" : "#0F172A",
-    subText: isDark ? "#94A3B8" : "#64748B",
-    inputBg: isDark ? "#121721" : "#F9FAFB",
-    border: isDark ? "#2D3748" : "#E2E8F0",
-    primary: "#3B66F5",
+    card: screenTheme.card,
+    text: screenTheme.text,
+    subText: screenTheme.subText,
+    inputBg: screenTheme.inputBg,
+    border: screenTheme.border,
+    primary: screenTheme.primary,
   };
 
   const handleSave = () => {

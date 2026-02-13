@@ -2,7 +2,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   Dimensions,
   Image,
   ImageBackground,
@@ -13,6 +12,7 @@ import {
   View,
 } from "react-native";
 import FooterLinks from "../components/FooterLinks";
+import SkeletonLoader from "../components/SkeletonLoader";
 import { OpenAISvg } from "../components/icons/bottomNavIcon";
 import WebSvg from "../components/WebSvg";
 import { parseStoredUser, resolveAuthenticatedRoute } from "../shared/authGate";
@@ -48,11 +48,7 @@ const Index = () => {
   }, [router]);
 
   if (checking) {
-    return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-        <ActivityIndicator />
-      </View>
-    );
+    return <SkeletonLoader variant="form" withScroll={false} />;
   }
 
   return (

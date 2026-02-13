@@ -29,7 +29,7 @@ const { height } = Dimensions.get("window");
 export default function UserRegistrationScreen1() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { isDark } = useTheme();
+  const { isDark, screenTheme } = useTheme();
   const { formData, updateFormData } = useRegistration();
 
   const deviceRegion = (Localization.getLocales()[0]?.regionCode ||
@@ -179,10 +179,10 @@ export default function UserRegistrationScreen1() {
 
   const theme = {
     colors: {
-      primary: "#3B66F5",
-      background: isDark ? "#020205" : "#F8FAFC",
-      text: isDark ? "#FFFFFF" : "#0F172A",
-      subText: isDark ? "#94A3B8" : "#64748B",
+      primary: screenTheme.primary,
+      background: screenTheme.bg,
+      text: screenTheme.text,
+      subText: screenTheme.subText,
       cardBg: isDark ? "rgba(255, 255, 255, 0.05)" : "#FFFFFF",
       cardBorder: isDark ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.05)",
       inputBg: isDark ? "rgba(255, 255, 255, 0.03)" : "#F1F5F9",

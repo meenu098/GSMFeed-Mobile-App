@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import SkeletonLoader from "../../../../components/SkeletonLoader";
 import CONFIG from "../../../../shared/config";
 import { useTheme } from "../../../../shared/themeContext";
 
@@ -161,7 +162,7 @@ const FollowRecommendationsStep = ({
   onFinish,
   onBack,
 }: FollowRecommendationsStepProps) => {
-  const { isDark } = useTheme();
+  const { isDark, screenTheme } = useTheme();
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [accounts, setAccounts] = useState<any[]>([]);
@@ -172,10 +173,10 @@ const FollowRecommendationsStep = ({
 
   const colors = {
     bg: isDark ? "#0F172A" : "#F0F7FF",
-    card: isDark ? "#1E293B" : "#FFFFFF",
-    text: isDark ? "#F8FAFC" : "#000000",
-    subText: isDark ? "#94A3B8" : "#4F4F4F",
-    primary: "#3B66F5",
+    card: screenTheme.card,
+    text: screenTheme.text,
+    subText: screenTheme.subText,
+    primary: screenTheme.primary,
   };
 
   const fetchSuggestions = useCallback(
@@ -409,11 +410,7 @@ const FollowRecommendationsStep = ({
         </View>
 
         {loading ? (
-          <ActivityIndicator
-            size="large"
-            color={colors.primary}
-            style={{ flex: 1 }}
-          />
+          <SkeletonLoader variant="list" count={6} withScroll={false} />
         ) : (
           <FlatList
             data={accounts}

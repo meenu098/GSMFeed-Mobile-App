@@ -3,7 +3,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   SafeAreaView,
   StyleSheet,
@@ -12,22 +11,23 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import SkeletonLoader from "../../components/SkeletonLoader";
 import CONFIG from "../../shared/config";
 import { useTheme } from "../../shared/themeContext";
 
 const AccountPrivacyScreen = () => {
-  const { isDark } = useTheme();
+  const { isDark, screenTheme } = useTheme();
   const router = useRouter();
   const [isPrivate, setIsPrivate] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const theme = {
-    bg: isDark ? "#0B0E14" : "#F8FAFC",
-    card: isDark ? "#121721" : "#FFFFFF",
-    text: isDark ? "#F8FAFC" : "#0F172A",
-    subText: isDark ? "#94A3B8" : "#64748B",
-    border: isDark ? "#1B2331" : "#E2E8F0",
-    primary: "#3B66F5",
+    bg: screenTheme.bg,
+    card: screenTheme.card,
+    text: screenTheme.text,
+    subText: screenTheme.subText,
+    border: screenTheme.border,
+    primary: screenTheme.primary,
   };
 
   useEffect(() => {
@@ -110,11 +110,7 @@ const AccountPrivacyScreen = () => {
       </View>
 
       {loading ? (
-        <ActivityIndicator
-          size="large"
-          color={theme.primary}
-          style={{ marginTop: 50 }}
-        />
+        <SkeletonLoader variant="form" withScroll={false} />
       ) : (
         <View style={styles.content}>
           {/* Main Privacy Card */}

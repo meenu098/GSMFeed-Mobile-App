@@ -125,7 +125,6 @@ export default function RegistrationScreen6() {
           [{ text: "OK", onPress: () => router.replace("/under-review") }],
         );
       } else {
-        console.log("Validation Errors:", result.errors);
         Alert.alert(
           "Signup Failed",
           result.message || "Please check your details.",

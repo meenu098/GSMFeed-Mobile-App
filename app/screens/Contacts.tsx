@@ -3,7 +3,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   FlatList,
   Image,
   RefreshControl,
@@ -14,6 +13,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import BottomNav from "../../components/BottomNav";
+import SkeletonLoader from "../../components/SkeletonLoader";
 import CONFIG from "../../shared/config";
 import { useTheme } from "../../shared/themeContext";
 
@@ -25,7 +25,7 @@ const tabMapping: Record<string, string> = {
 };
 
 export default function ContactsScreen() {
-  const { isDark } = useTheme();
+  const { screenTheme } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { tab } = useLocalSearchParams();
@@ -38,14 +38,7 @@ export default function ContactsScreen() {
   const [hasMore, setHasMore] = useState(true);
   const [counts, setCounts] = useState({ following: 0, followers: 0 });
 
-  const theme = {
-    bg: isDark ? "#0B0E14" : "#F8FAFC",
-    text: isDark ? "#F8FAFC" : "#0F172A",
-    subText: isDark ? "#94A3B8" : "#64748B",
-    border: isDark ? "#1B2331" : "#E2E8F0",
-    primary: "#3B66F5",
-    badge: "#316aff",
-  };
+  const theme = screenTheme;
 
   const fetchContacts = useCallback(
     async (pageNum: number, isRefresh = false) => {
@@ -237,9 +230,7 @@ export default function ContactsScreen() {
       </View>
 
       {loading && page === 1 ? (
-        <View style={styles.centered}>
-          <ActivityIndicator color={theme.primary} size="large" />
-        </View>
+        <SkeletonLoader variant="list" count={8} />
       ) : (
         <FlatList
           data={contacts}

@@ -10,15 +10,15 @@ interface OnboardingWelcomeProps {
 }
 
 const OnboardingWelcome = ({ onStart, onLogout }: OnboardingWelcomeProps) => {
-  const { isDark } = useTheme();
+  const { isDark, screenTheme } = useTheme();
 
   // Theme-aware colors, though the screenshot shows a specific light blue palette
   const colors = {
-    bg: isDark ? "#0F172A" : "#F0F7FF", // Light blue background from screenshot
-    card: isDark ? "#1E293B" : "#FFFFFF",
-    text: isDark ? "#F8FAFC" : "#000000",
-    subText: isDark ? "#94A3B8" : "#1E293B",
-    primary: "#3B66F5",
+    bg: isDark ? "#0F172A" : "#F0F7FF", // keep onboarding-specific tint
+    card: screenTheme.card,
+    text: screenTheme.text,
+    subText: screenTheme.subText,
+    primary: screenTheme.primary,
   };
 
   return (

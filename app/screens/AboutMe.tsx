@@ -5,7 +5,6 @@ import { format, isValid, parseISO } from "date-fns";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -15,6 +14,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import SkeletonLoader from "../../components/SkeletonLoader";
 import CONFIG from "../../shared/config";
 import { useTheme } from "../../shared/themeContext";
 import {
@@ -224,7 +224,7 @@ const AboutRow = ({
 export default function AboutMeScreen() {
   const router = useRouter();
   const { userId } = useLocalSearchParams();
-  const { isDark } = useTheme();
+  const { isDark, screenTheme } = useTheme();
   const [loading, setLoading] = useState(true);
   const [aboutData, setAboutData] = useState<AboutData>({
     storedUser: null,
@@ -235,11 +235,11 @@ export default function AboutMeScreen() {
   const [lockedFieldWarning, setLockedFieldWarning] = useState<string | null>(null);
 
   const theme = {
-    bg: isDark ? "#0B0E14" : "#F8FAFC",
-    titleText: isDark ? "#E2E8F0" : "#4B5563",
-    valueText: isDark ? "#CBD5E1" : "#64748B",
-    headerText: isDark ? "#F8FAFC" : "#4B5563",
-    border: isDark ? "#1F2937" : "#E2E8F0",
+    bg: screenTheme.bg,
+    titleText: screenTheme.titleText,
+    valueText: screenTheme.valueText,
+    headerText: screenTheme.text,
+    border: screenTheme.border,
     icon: isDark ? "#E5E7EB" : "#525252",
     isDark,
   };
@@ -367,9 +367,7 @@ export default function AboutMeScreen() {
       <View style={[styles.headerDivider, { backgroundColor: theme.border }]} />
 
       {loading ? (
-        <View style={styles.loaderWrap}>
-          <ActivityIndicator size="large" color="#3B66F5" />
-        </View>
+        <SkeletonLoader variant="profile" count={1} />
       ) : (
         <ScrollView
           showsVerticalScrollIndicator={false}

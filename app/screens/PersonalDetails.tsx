@@ -3,13 +3,13 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   SafeAreaView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import SkeletonLoader from "../../components/SkeletonLoader";
 import CONFIG from "../../shared/config";
 import { useTheme } from "../../shared/themeContext";
 
@@ -20,7 +20,7 @@ import {
 } from "../../components/PersonalInfo";
 
 const PersonalDetailsScreen = () => {
-  const { isDark } = useTheme();
+  const { screenTheme } = useTheme();
   const router = useRouter();
 
   // State Management
@@ -33,11 +33,11 @@ const PersonalDetailsScreen = () => {
   const [addressModalVisible, setAddressModalVisible] = useState(false);
 
   const theme = {
-    bg: isDark ? "#0B0E14" : "#F8FAFC",
-    card: isDark ? "#121721" : "#FFFFFF",
-    text: isDark ? "#F8FAFC" : "#1a1a1a",
-    border: isDark ? "#2D3748" : "#E2E8F0",
-    primary: "#3B66F5",
+    bg: screenTheme.bg,
+    card: screenTheme.card,
+    text: screenTheme.text,
+    border: screenTheme.border,
+    primary: screenTheme.primary,
   };
 
   useEffect(() => {
@@ -86,16 +86,7 @@ const PersonalDetailsScreen = () => {
   };
 
   if (loading) {
-    return (
-      <View
-        style={[
-          styles.container,
-          { backgroundColor: theme.bg, justifyContent: "center" },
-        ]}
-      >
-        <ActivityIndicator size="large" color={theme.primary} />
-      </View>
-    );
+    return <SkeletonLoader variant="form" withScroll={false} />;
   }
 
   return (

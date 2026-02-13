@@ -19,6 +19,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import SkeletonLoader from "../../components/SkeletonLoader";
 import CONFIG from "../../shared/config";
 import { useTheme } from "../../shared/themeContext";
 
@@ -61,16 +62,14 @@ const MessageBubble = ({ item, theme, isDark, currentUserId }: any) => {
 };
 
 export default function IndividualChatScreen() {
-  const { isDark } = useTheme();
+  const { isDark, screenTheme } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { chatId, chatName, chatAvatar, initialMessage } = useLocalSearchParams();
   const chatIdValue = Array.isArray(chatId) ? chatId[0] : chatId;
   const chatNameValue = Array.isArray(chatName) ? chatName[0] : chatName;
   const chatAvatarValue = Array.isArray(chatAvatar) ? chatAvatar[0] : chatAvatar;
-  const log = (...args: any[]) => {
-    if (__DEV__) console.log(...args);
-  };
+  const log = (..._args: any[]) => {};
   const [messages, setMessages] = useState<any[]>([]);
   const [inputText, setInputText] = useState("");
   const [loading, setLoading] = useState(true);
@@ -82,12 +81,12 @@ export default function IndividualChatScreen() {
   const lastMessageIdRef = useRef<number | null>(null);
 
   const theme = {
-    bg: isDark ? "#0B0E14" : "#F8FAFC",
-    card: isDark ? "#121721" : "#FFFFFF",
-    text: isDark ? "#F8FAFC" : "#1E293B",
-    subText: isDark ? "#94A3B8" : "#64748B",
-    border: isDark ? "#1B2331" : "#E2E8F0",
-    primary: "#3B66F5",
+    bg: screenTheme.bg,
+    card: screenTheme.card,
+    text: screenTheme.text,
+    subText: screenTheme.subText,
+    border: screenTheme.border,
+    primary: screenTheme.primary,
   };
 
   const initialMessageText =
@@ -444,7 +443,7 @@ export default function IndividualChatScreen() {
         </TouchableOpacity>
       </View>
       {loading ? (
-        <ActivityIndicator style={{ flex: 1 }} color={theme.primary} />
+        <SkeletonLoader variant="chat" count={6} withScroll={false} />
       ) : (
         <FlatList
           ref={flatListRef}

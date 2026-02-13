@@ -14,7 +14,7 @@ import BottomNav from "../../components/BottomNav";
 import { useTheme } from "../../shared/themeContext";
 
 export default function ContactsScreen() {
-  const { isDark } = useTheme();
+  const { screenTheme } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("Followers");
@@ -46,12 +46,12 @@ export default function ContactsScreen() {
   const tabs = ["Followers", "Following", "Suggestions", "Requests"];
 
   const theme = {
-    bg: isDark ? "#0B0E14" : "#F8FAFC",
-    card: isDark ? "#121721" : "#FFFFFF",
-    text: isDark ? "#F8FAFC" : "#0F172A",
-    subText: isDark ? "#94A3B8" : "#64748B",
-    border: isDark ? "#1B2331" : "#E2E8F0",
-    primary: "#3B66F5",
+    bg: screenTheme.bg,
+    card: screenTheme.card,
+    text: screenTheme.text,
+    subText: screenTheme.subText,
+    border: screenTheme.border,
+    primary: screenTheme.primary,
   };
 
   return (

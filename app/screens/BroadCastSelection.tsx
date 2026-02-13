@@ -1,4 +1,3 @@
-import { useNavigation } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import React from "react";
 import { Modal, StyleSheet, Text, TouchableOpacity, View } from "react-native";
@@ -18,15 +17,14 @@ const BroadcastSelection = ({
   onSelect,
 }: BroadcastSelectionProps) => {
   const insets = useSafeAreaInsets();
-  const { isDark } = useTheme();
-  const navigation = useNavigation<any>();
+  const { screenTheme } = useTheme();
   const router = useRouter();
 
   const theme = {
-    bg: isDark ? "#000000" : "#FFFFFF",
-    text: isDark ? "#FFFFFF" : "#000000",
-    cardBg: isDark ? "#1A1A1A" : "#F4F7FF",
-    iconBlue: "#3B66F5",
+    bg: screenTheme.bg,
+    text: screenTheme.text,
+    cardBg: screenTheme.card,
+    iconBlue: screenTheme.primary,
   };
 
   const handleClose = () => {

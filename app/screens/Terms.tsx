@@ -16,13 +16,13 @@ import { useTheme } from "../../shared/themeContext";
 const Terms = () => {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { isDark } = useTheme();
+  const { isDark, screenTheme } = useTheme();
 
   const theme = {
-    background: isDark ? "#0B0E14" : "#F8FAFC",
-    text: isDark ? "#F8FAFC" : "#1E293B",
-    subText: isDark ? "#94A3B8" : "#64748B",
-    closeIcon: isDark ? "#F8FAFC" : "#1E293B",
+    background: screenTheme.bg,
+    text: screenTheme.text,
+    subText: screenTheme.subText,
+    closeIcon: screenTheme.text,
   };
   return (
     <ScreenWrapper bg={theme.background}>

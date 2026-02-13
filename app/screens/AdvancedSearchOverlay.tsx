@@ -42,7 +42,7 @@ export default function AdvancedSearchOverlay() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const inputRef = useRef<TextInput>(null);
-  const { isDark } = useTheme();
+  const { isDark, screenTheme } = useTheme();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [searchBuckets, setSearchBuckets] =
@@ -55,11 +55,11 @@ export default function AdvancedSearchOverlay() {
 
   const theme = {
     bg: isDark ? "rgba(11, 14, 20, 0.9)" : "rgba(248, 250, 252, 0.8)",
-    pillBg: isDark ? "#121721" : "#FFFFFF",
-    text: isDark ? "#F8FAFC" : "#0F172A",
-    placeholder: isDark ? "#94A3B8" : "#64748B",
-    primary: "#3B66F5",
-    border: isDark ? "#1B2331" : "#E2E8F0",
+    pillBg: screenTheme.pillBg,
+    text: screenTheme.text,
+    placeholder: screenTheme.placeholder,
+    primary: screenTheme.primary,
+    border: screenTheme.border,
   };
 
   useEffect(() => {

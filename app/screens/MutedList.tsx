@@ -4,7 +4,6 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   Image,
   SafeAreaView,
@@ -14,24 +13,25 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import SkeletonLoader from "../../components/SkeletonLoader";
 import CONFIG from "../../shared/config";
 import { useTheme } from "../../shared/themeContext";
 
 const MutedAccountsScreen = () => {
-  const { isDark } = useTheme();
+  const { isDark, screenTheme } = useTheme();
   const router = useRouter();
   const [mutedUsers, setMutedUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Dynamic Theme based on your global theme context
   const theme = {
-    bg: isDark ? "#0B0E14" : "#F8FAFC",
-    card: isDark ? "#121721" : "#FFFFFF",
-    text: isDark ? "#F8FAFC" : "#0F172A",
-    subText: isDark ? "#94A3B8" : "#64748B",
-    border: isDark ? "#1B2331" : "#E2E8F0",
+    bg: screenTheme.bg,
+    card: screenTheme.card,
+    text: screenTheme.text,
+    subText: screenTheme.subText,
+    border: screenTheme.border,
     buttonBg: isDark ? "#1B2331" : "#E9ECEF",
-    primary: "#3B66F5",
+    primary: screenTheme.primary,
   };
 
   useEffect(() => {
@@ -110,11 +110,7 @@ const MutedAccountsScreen = () => {
         </Text>
 
         {loading ? (
-          <ActivityIndicator
-            size="large"
-            color={theme.primary}
-            style={{ marginTop: 50 }}
-          />
+          <SkeletonLoader variant="list" count={5} withScroll={false} />
         ) : mutedUsers?.length > 0 ? (
           /* Muted User List Mapping */
           mutedUsers.map((item, index) => (

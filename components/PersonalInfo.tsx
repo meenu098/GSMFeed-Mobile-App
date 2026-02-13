@@ -28,21 +28,21 @@ const PersonalInfoModal = ({
   user,
   checkIfDataChanged,
 }: any) => {
-  const { isDark } = useTheme();
+  const { isDark, screenTheme } = useTheme();
   const [isChecked, setIsChecked] = useState(false);
   const [countryPickerVisible, setCountryPickerVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
 
   const theme = {
-    card: isDark ? "#1E2530" : "#FFFFFF",
-    text: isDark ? "#F8FAFC" : "#0F172A",
-    subText: isDark ? "#94A3B8" : "#64748B",
-    border: isDark ? "#2D3748" : "#E2E8F0",
-    primary: "#3B66F5",
-    inputBg: isDark ? "#121721" : "#F9FAFB",
-    overlay: "rgba(0,0,0,0.5)",
-    disabledBtn: isDark ? "#2D3748" : "#A5B4FC",
+    card: screenTheme.card,
+    text: screenTheme.text,
+    subText: screenTheme.subText,
+    border: screenTheme.border,
+    primary: screenTheme.primary,
+    inputBg: screenTheme.inputBg,
+    overlay: screenTheme.overlay,
+    disabledBtn: screenTheme.buttonDisabled,
   };
 
   // --- 30-Day Logic ---
@@ -346,15 +346,15 @@ const AddressInfoModal = ({
   user,
   checkIfDataChanged,
 }: any) => {
-  const { isDark } = useTheme();
+  const { screenTheme } = useTheme();
 
   const theme = {
-    card: isDark ? "#1E2530" : "#FFFFFF",
-    text: isDark ? "#F8FAFC" : "#0F172A",
-    border: isDark ? "#2D3748" : "#E2E8F0",
-    primary: "#3B66F5",
-    inputBg: isDark ? "#121721" : "#F9FAFB",
-    disabledBtn: isDark ? "#2D3748" : "#A5B4FC",
+    card: screenTheme.card,
+    text: screenTheme.text,
+    border: screenTheme.border,
+    primary: screenTheme.primary,
+    inputBg: screenTheme.inputBg,
+    disabledBtn: screenTheme.buttonDisabled,
   };
 
   const handleSubmit = async () => {

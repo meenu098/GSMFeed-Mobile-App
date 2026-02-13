@@ -4,7 +4,6 @@ import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   Image,
   Platform,
@@ -20,11 +19,12 @@ import AvatarEditModal from "../screens/AvatarModalComponent";
 import CoverEditModal from "../screens/CoverPhotoModal";
 import PositionSelectionModal from "../screens/PositionSelectionModal";
 import SocialLinksModal from "../screens/SocialLinkModal";
+import SkeletonLoader from "../../components/SkeletonLoader";
 import CONFIG from "../../shared/config";
 import { useTheme } from "../../shared/themeContext";
 
 const EditProfileScreen = () => {
-  const { isDark } = useTheme();
+  const { screenTheme } = useTheme();
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
@@ -49,13 +49,13 @@ const EditProfileScreen = () => {
   const [editType, setEditType] = useState<"avatar" | "cover">("avatar");
 
   const theme = {
-    bg: isDark ? "#0B0E14" : "#F8FAFC",
-    card: isDark ? "#121721" : "#FFFFFF",
-    text: isDark ? "#F8FAFC" : "#1a1a1a",
-    inputBg: isDark ? "#1E2530" : "#FFFFFF",
-    border: isDark ? "#2D3748" : "#E2E8F0",
-    primary: "#3B66F5",
-    subText: isDark ? "#94A3B8" : "#666",
+    bg: screenTheme.bg,
+    card: screenTheme.card,
+    text: screenTheme.text,
+    inputBg: screenTheme.inputBg,
+    border: screenTheme.border,
+    primary: screenTheme.primary,
+    subText: screenTheme.subText,
   };
 
   useEffect(() => {
@@ -240,7 +240,7 @@ const EditProfileScreen = () => {
       : data?.company_category?.name;
 
   if (loading)
-    return <ActivityIndicator style={{ flex: 1 }} color={theme.primary} />;
+    return <SkeletonLoader variant="form" withScroll={false} />;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]}>

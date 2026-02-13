@@ -28,7 +28,7 @@ import { useTheme } from "../../../../shared/themeContext";
 export default function UserRegistrationScreen2() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { isDark } = useTheme();
+  const { isDark, screenTheme } = useTheme();
   const { formData, updateFormData } = useRegistration();
 
   // Date State
@@ -63,12 +63,12 @@ export default function UserRegistrationScreen2() {
 
   const theme = {
     colors: {
-      background: isDark ? "#020205" : "#F8FAFC",
-      text: isDark ? "#FFFFFF" : "#0F172A",
-      subText: isDark ? "#94A3B8" : "#64748B",
+      background: screenTheme.bg,
+      text: screenTheme.text,
+      subText: screenTheme.subText,
       cardBg: isDark ? "#11111F" : "#FFFFFF",
       inputBg: isDark ? "rgba(255, 255, 255, 0.05)" : "#F1F5F9",
-      primary: "#3B66F5",
+      primary: screenTheme.primary,
       border: isDark ? "rgba(255,255,255,0.1)" : "#E2E8F0",
     },
   };

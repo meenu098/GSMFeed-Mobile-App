@@ -45,7 +45,7 @@ const normalizeImageUris = (value: unknown): string[] => {
 };
 
 const ProductDescAI = ({ listingData, onNext, onBack }: any) => {
-  const { isDark } = useTheme();
+  const { screenTheme } = useTheme();
   const [selectedTone, setSelectedTone] = useState("Professional");
   const [isCompiling, setIsCompiling] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
@@ -54,11 +54,11 @@ const ProductDescAI = ({ listingData, onNext, onBack }: any) => {
   const submitButtonLabel = selectedDesc?.trim() ? "Post" : "Skip & Post";
 
   const colors = {
-    bg: isDark ? "#0F172A" : "#F8FAFC",
-    card: isDark ? "#1E293B" : "#FFFFFF",
-    text: isDark ? "#F8FAFC" : "#1E293B",
+    bg: screenTheme.bg,
+    card: screenTheme.card,
+    text: screenTheme.text,
     primary: "#3B82F6",
-    border: isDark ? "#334155" : "#E2E8F0",
+    border: screenTheme.border,
   };
 
   const products =

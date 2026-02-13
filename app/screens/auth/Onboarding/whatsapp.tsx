@@ -57,7 +57,7 @@ const WhatsAppVerification: FC<WhatsAppVerificationProps> = ({
   onBack,
   displayPhone,
 }) => {
-  const { isDark } = useTheme();
+  const { isDark, screenTheme } = useTheme();
 
   const derivedPhoneData = useMemo(() => {
     const countryCode =
@@ -95,12 +95,12 @@ const WhatsAppVerification: FC<WhatsAppVerificationProps> = ({
 
   const colors = {
     bg: isDark ? "#0F172A" : "#E8F5E9",
-    card: isDark ? "#1E293B" : "#FFFFFF",
-    text: isDark ? "#F8FAFC" : "#1D1D1D",
-    subText: isDark ? "#94A3B8" : "#4F4F4F",
-    whatsapp: "#179D0D",
-    danger: "#EF4444",
-    buttonDisabled: isDark ? "#334155" : "#CBD5E1",
+    card: screenTheme.card,
+    text: screenTheme.text,
+    subText: screenTheme.subText,
+    whatsapp: screenTheme.whatsapp,
+    danger: screenTheme.danger,
+    buttonDisabled: screenTheme.buttonDisabled,
   };
 
   useEffect(() => {

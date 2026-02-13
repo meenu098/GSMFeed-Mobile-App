@@ -18,14 +18,14 @@ interface NotificationStepProps {
 }
 
 const NotificationStep = ({ onNext, onBack }: NotificationStepProps) => {
-  const { isDark } = useTheme();
+  const { isDark, screenTheme } = useTheme();
   const [isEnabled, setIsEnabled] = useState(false);
 
   const colors = {
     bg: isDark ? "#0F172A" : "#F8F3FF",
-    card: isDark ? "#1E293B" : "#FFFFFF",
-    text: isDark ? "#F8FAFC" : "#1D1D1D",
-    subText: isDark ? "#94A3B8" : "#4F4F4F",
+    card: screenTheme.card,
+    text: screenTheme.text,
+    subText: screenTheme.subText,
     primary: "#8B5CF6",
   };
 

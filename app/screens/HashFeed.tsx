@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import BottomNav from "../../components/BottomNav";
+import SkeletonLoader from "../../components/SkeletonLoader";
 import CONFIG from "../../shared/config";
 import { useTheme } from "../../shared/themeContext";
 import { PostItem } from "./Newsfeed";
@@ -137,7 +138,7 @@ const buildHashtagUrls = (tag: string, page: number) => {
 const HashFeedScreen = () => {
   const { tag } = useLocalSearchParams();
   const router = useRouter();
-  const { isDark } = useTheme();
+  const { screenTheme } = useTheme();
 
   const selectedTag = useMemo(() => toTagText(tag), [tag]);
 
@@ -149,15 +150,7 @@ const HashFeedScreen = () => {
   const [hasMore, setHasMore] = useState(false);
   const [totalCount, setTotalCount] = useState<number | null>(null);
 
-  const theme = {
-    bg: isDark ? "#050609" : "#F8FAFC",
-    cardBg: isDark ? "#121721" : "#FFFFFF",
-    text: isDark ? "#F8FAFC" : "#1E293B",
-    subText: isDark ? "#94A3B8" : "#64748B",
-    primary: "#3B66F5",
-    border: isDark ? "#1F2937" : "#E2E8F0",
-    isDark,
-  };
+  const theme = screenTheme;
 
   const fetchTaggedFeed = useCallback(
     async (pageNum = 1, isRefresh = false) => {
@@ -295,9 +288,7 @@ const HashFeedScreen = () => {
       </View>
 
       {loading && feed.length === 0 ? (
-        <View style={styles.loadingArea}>
-          <ActivityIndicator color={theme.primary} size="large" />
-        </View>
+        <SkeletonLoader variant="feed" count={2} />
       ) : (
         <FlatList
           data={feed}

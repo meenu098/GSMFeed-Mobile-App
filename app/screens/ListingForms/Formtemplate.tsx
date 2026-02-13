@@ -66,7 +66,7 @@ const FormTemplate = ({
   onNext,
   onBack,
 }: FormTemplateProps) => {
-  const { isDark } = useTheme();
+  const { isDark, screenTheme } = useTheme();
   const [activeType, setActiveType] = useState(
     initialData?.type || initialType,
   );
@@ -118,12 +118,12 @@ const FormTemplate = ({
   ];
 
   const colors = {
-    bg: isDark ? "#0F172A" : "#F8FAFC",
-    card: isDark ? "#1E293B" : "#FFFFFF",
-    text: isDark ? "#F8FAFC" : "#1E293B",
-    subText: isDark ? "#94A3B8" : "#64748B",
-    border: isDark ? "#334155" : "#E2E8F0",
-    inputBg: isDark ? "#0F172A" : "#FFFFFF",
+    bg: screenTheme.bg,
+    card: screenTheme.card,
+    text: screenTheme.text,
+    subText: screenTheme.subText,
+    border: screenTheme.border,
+    inputBg: isDark ? "#0F172A" : screenTheme.card,
   };
 
   useEffect(() => {
@@ -211,7 +211,6 @@ const FormTemplate = ({
       extraDetails: extraDetails,
     };
 
-    console.log("FormTemplate sending data with IDs:", data);
     onNext(data);
   };
 

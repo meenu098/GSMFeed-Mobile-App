@@ -40,9 +40,7 @@ import ListingSummary from "./ListingSummary";
 const CreateListingScreen = () => {
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState(null);
-  console.log("here");
   const handleNextStep = (data: any) => {
-    console.log("CRITICAL: handleNextStep triggered with data:", data);
     setFormData(data);
 
     // Using a timeout ensures the state update is processed
@@ -59,7 +57,7 @@ const CreateListingScreen = () => {
           key="step1-form"
           type="Sell"
           onNext={handleNextStep}
-          onBack={() => console.log("Exit flow")}
+          onBack={() => {}}
         />
       )}
 
@@ -67,7 +65,7 @@ const CreateListingScreen = () => {
         <ListingSummary
           key="step2-summary"
           listingData={formData}
-          onNext={() => console.log("Final Flow", formData)}
+          onNext={() => {}}
           onBack={() => setStep(1)}
         />
       )}

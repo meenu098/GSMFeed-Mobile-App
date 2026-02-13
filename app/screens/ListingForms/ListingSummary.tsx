@@ -49,7 +49,7 @@ const ListingSummary = ({
   onEditProduct,
   listingData,
 }: ListingSummaryProps) => {
-  const { isDark } = useTheme();
+  const { isDark, screenTheme } = useTheme();
   const [remarks, setRemarks] = useState(listingData?.remarks || "");
   const [selectedHashtags, setSelectedHashtags] = useState<string[]>(
     Array.isArray(listingData?.hashtags) ? listingData.hashtags : [],
@@ -63,13 +63,13 @@ const ListingSummary = ({
   const [isFetchingHashtags, setIsFetchingHashtags] = useState(false);
 
   const colors = {
-    bg: isDark ? "#0F172A" : "#F8FAFC",
-    card: isDark ? "#1E293B" : "#FFFFFF",
-    text: isDark ? "#F8FAFC" : "#1E293B",
-    subText: isDark ? "#94A3B8" : "#64748B",
-    border: isDark ? "#334155" : "#E2E8F0",
+    bg: screenTheme.bg,
+    card: screenTheme.card,
+    text: screenTheme.text,
+    subText: screenTheme.subText,
+    border: screenTheme.border,
     primary: "#3B82F6",
-    inputBg: isDark ? "#1E293B" : "#FFFFFF",
+    inputBg: isDark ? "#1E293B" : screenTheme.card,
     labelBg: isDark ? "#1E293B" : "#F1F5F9",
   };
 

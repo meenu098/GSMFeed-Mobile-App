@@ -3,9 +3,12 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { RegistrationProvider } from "../shared/RegistrationContext";
 import { ThemeProvider, useTheme } from "../shared/themeContext";
+import { applyGlobalTypography } from "../shared/globalTypography";
+
+applyGlobalTypography();
 
 function RootLayoutNav() {
-  const { isDark } = useTheme();
+  const { isDark, colors } = useTheme();
 
   return (
     <SafeAreaProvider>
@@ -18,8 +21,9 @@ function RootLayoutNav() {
       <Stack
         screenOptions={{
           headerShown: false,
+          animation: "fade",
           contentStyle: {
-            backgroundColor: isDark ? "#000" : "#FFF",
+            backgroundColor: colors.background,
             flex: 1,
           },
         }}

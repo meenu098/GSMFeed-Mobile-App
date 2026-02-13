@@ -1,7 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, StyleSheet, View } from "react-native";
+import { Alert, StyleSheet, View } from "react-native";
+import SkeletonLoader from "../../../../components/SkeletonLoader";
 import { resolveAuthenticatedRoute } from "../../../../shared/authGate";
 import CONFIG from "../../../../shared/config";
 import { clearUser, setUser } from "../../../../shared/storage";
@@ -231,11 +232,7 @@ const OnboardingController = () => {
   };
 
   if (loading) {
-    return (
-      <View style={styles.loader}>
-        <ActivityIndicator />
-      </View>
-    );
+    return <SkeletonLoader variant="form" withScroll={false} />;
   }
 
   return (

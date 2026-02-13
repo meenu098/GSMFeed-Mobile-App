@@ -28,6 +28,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import BottomNav from "../../components/BottomNav";
+import SkeletonLoader from "../../components/SkeletonLoader";
 import CONFIG from "../../shared/config";
 import { useTheme } from "../../shared/themeContext";
 
@@ -43,7 +44,7 @@ type PickerType =
   | "storage";
 
 const TradingFeed = () => {
-  const { isDark } = useTheme();
+  const { isDark, screenTheme } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [search, setSearch] = useState("");
@@ -355,12 +356,12 @@ const TradingFeed = () => {
   }, [search, selectedProduct]);
 
   const theme = {
-    bg: isDark ? "#0B0E14" : "#F8FAFC",
-    card: isDark ? "#0F172A" : "#FFFFFF",
-    text: isDark ? "#F8FAFC" : "#0F172A",
-    subText: isDark ? "#94A3B8" : "#64748B",
-    border: isDark ? "#1E293B" : "#E2E8F0",
-    primary: "#3B66F5",
+    bg: screenTheme.bg,
+    card: screenTheme.card,
+    text: screenTheme.text,
+    subText: screenTheme.subText,
+    border: screenTheme.border,
+    primary: screenTheme.primary,
     chipBg: isDark ? "#111827" : "#F1F5F9",
   };
 
@@ -1042,9 +1043,7 @@ const TradingFeed = () => {
       </View>
 
       {loading && feeds.length === 0 ? (
-        <View style={styles.centered}>
-          <ActivityIndicator color={theme.primary} size="large" />
-        </View>
+        <SkeletonLoader variant="feed" count={3} />
       ) : (
         <FlatList
           data={filteredFeeds}

@@ -29,7 +29,7 @@ const Login = () => {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   // 1. Hook into your theme context
-  const { isDark } = useTheme();
+  const { isDark, colors: appColors, screenTheme } = useTheme();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -40,12 +40,12 @@ const Login = () => {
   // 2. Define dynamic theme based on isDark
   const theme = {
     colors: {
-      primary: "#3B66F5",
-      background: isDark ? "#020205" : "#F8FAFC",
+      primary: appColors.primary,
+      background: screenTheme.bg,
       surface: isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.03)",
       border: isDark ? "rgba(255, 255, 255, 0.2)" : "rgba(0, 0, 0, 0.1)",
-      text: isDark ? "#FFFFFF" : "#0F172A",
-      textMuted: isDark ? "#94A3B8" : "#64748B",
+      text: screenTheme.text,
+      textMuted: screenTheme.subText,
       // If Light mode, maybe use a lighter gradient or just a solid color
       gradient: isDark
         ? (["#1A0B2E", "#020205", "#050A1A"] as const)

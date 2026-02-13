@@ -46,7 +46,7 @@ const ChangeOtpNumberModal = ({
   currentPhoneCode,
   currentNumber,
 }: ChangeOtpNumberModalProps) => {
-  const { isDark } = useTheme();
+  const { isDark, screenTheme } = useTheme();
   const [search, setSearch] = useState("");
   const [showPicker, setShowPicker] = useState(false);
   const [selectedCountry, setSelectedCountry] = useState<{
@@ -61,14 +61,14 @@ const ChangeOtpNumberModal = ({
   );
 
   const colors = {
-    card: isDark ? "#1E293B" : "#FFFFFF",
-    text: isDark ? "#F8FAFC" : "#1D1D1D",
-    subText: isDark ? "#94A3B8" : "#64748B",
+    card: screenTheme.card,
+    text: screenTheme.text,
+    subText: screenTheme.subText,
     border: isDark ? "#334155" : "#E2E8F0",
-    inputBg: isDark ? "#0F172A" : "#FFFFFF",
-    primary: "#3B66F5",
-    whatsapp: "#179D0D",
-    disabled: isDark ? "#334155" : "#CBD5E1",
+    inputBg: isDark ? "#0F172A" : screenTheme.card,
+    primary: screenTheme.primary,
+    whatsapp: screenTheme.whatsapp,
+    disabled: screenTheme.buttonDisabled,
   };
 
   const countriesData = useMemo(

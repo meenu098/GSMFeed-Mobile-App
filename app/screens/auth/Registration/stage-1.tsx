@@ -21,7 +21,7 @@ const { width } = Dimensions.get("window");
 export default function RegistrationScreen1() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { isDark } = useTheme();
+  const { isDark, screenTheme } = useTheme();
 
   const { updateFormData } = useRegistration();
   const handleSelection = (type: "business" | "individual", route: string) => {
@@ -31,11 +31,11 @@ export default function RegistrationScreen1() {
 
   const theme = {
     colors: {
-      primary: "#3B66F5",
-      background: isDark ? "#020205" : "#F8FAFC",
-      text: isDark ? "#FFFFFF" : "#0F172A",
-      subText: isDark ? "#94A3B8" : "#64748B",
-      icon: isDark ? "#FFFFFF" : "#3B66F5",
+      primary: screenTheme.primary,
+      background: screenTheme.bg,
+      text: screenTheme.text,
+      subText: screenTheme.subText,
+      icon: isDark ? "#FFFFFF" : screenTheme.primary,
       cardBg: isDark ? "rgba(255, 255, 255, 0.05)" : "#FFFFFF",
       cardBorder: isDark ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.05)",
       circleBg: isDark

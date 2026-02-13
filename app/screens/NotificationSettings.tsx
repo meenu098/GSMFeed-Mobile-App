@@ -3,7 +3,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   Modal,
   Platform,
@@ -15,11 +14,12 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import SkeletonLoader from "../../components/SkeletonLoader";
 import CONFIG from "../../shared/config";
 import { useTheme } from "../../shared/themeContext";
 
 const NotificationSettingsScreen = () => {
-  const { isDark } = useTheme();
+  const { screenTheme } = useTheme();
   const router = useRouter();
 
   // States
@@ -34,13 +34,13 @@ const NotificationSettingsScreen = () => {
   });
 
   const theme = {
-    bg: isDark ? "#0B0E14" : "#F8FAFC",
-    card: isDark ? "#1E2530" : "#FFFFFF",
-    text: isDark ? "#F8FAFC" : "#0F172A",
-    subText: isDark ? "#94A3B8" : "#64748B",
-    border: isDark ? "#1B2331" : "#E2E8F0",
-    primary: "#3B66F5",
-    overlay: "rgba(0,0,0,0.6)",
+    bg: screenTheme.bg,
+    card: screenTheme.card,
+    text: screenTheme.text,
+    subText: screenTheme.subText,
+    border: screenTheme.border,
+    primary: screenTheme.primary,
+    overlay: screenTheme.overlay,
   };
 
   const timeOptions = [
@@ -178,7 +178,7 @@ const NotificationSettingsScreen = () => {
   };
 
   if (loading)
-    return <ActivityIndicator style={{ flex: 1 }} color={theme.primary} />;
+    return <SkeletonLoader variant="form" withScroll={false} />;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]}>

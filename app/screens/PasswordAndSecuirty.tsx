@@ -12,16 +12,16 @@ import { useTheme } from "../../shared/themeContext";
 import PasswordChangeModal from "./PasswordChangeModal";
 
 const PasswordSecurityScreen = () => {
-  const { isDark } = useTheme();
+  const { screenTheme } = useTheme();
   const router = useRouter();
   const [modalVisible, setModalVisible] = useState(false);
 
   const theme = {
-    bg: isDark ? "#0B0E14" : "#F8FAFC",
-    card: isDark ? "#121721" : "#FFFFFF",
-    text: isDark ? "#F8FAFC" : "#0F172A",
-    subText: isDark ? "#94A3B8" : "#64748B",
-    border: isDark ? "#1B2331" : "#E2E8F0",
+    bg: screenTheme.bg,
+    card: screenTheme.card,
+    text: screenTheme.text,
+    subText: screenTheme.subText,
+    border: screenTheme.border,
   };
 
   return (

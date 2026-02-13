@@ -26,17 +26,17 @@ import { useTheme } from "../../shared/themeContext";
 export default function Sidebar() {
   const router = useRouter();
   const { top, bottom } = useSafeAreaInsets();
-  const { isDark, toggleTheme } = useTheme();
+  const { isDark, toggleTheme, screenTheme } = useTheme();
 
   const [userData, setUserData] = useState<any>(null);
   const [imgLoading, setImgLoading] = useState(false);
 
   const themeColors = {
-    bg: isDark ? "#050609" : "#F8FAFC",
-    text: isDark ? "#FFFFFF" : "#000000",
-    subText: isDark ? "#94A3B8" : "#666666",
-    footerBorder: isDark ? "#1E293B" : "#F0F0F0",
-    toggleTrack: isDark ? "#3B66F5" : "#E2E8F0",
+    bg: screenTheme.bg,
+    text: screenTheme.text,
+    subText: screenTheme.subText,
+    footerBorder: screenTheme.border,
+    toggleTrack: isDark ? screenTheme.primary : "#E2E8F0",
   };
 
   const formatUrl = (url: string) => {

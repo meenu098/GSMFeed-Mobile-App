@@ -39,6 +39,7 @@ import LoveIcon from "../../assets/reaction/love.svg";
 import SadIcon from "../../assets/reaction/sad.svg";
 import WowIcon from "../../assets/reaction/wow.svg";
 import BottomNav from "../../components/BottomNav";
+import SkeletonLoader from "../../components/SkeletonLoader";
 import SidebarOverlay from "../../components/SidebarOverlay";
 import { AiIcon } from "../../components/icons/icons";
 import { useFeedData } from "../../hooks/useFeedData";
@@ -60,7 +61,9 @@ const clampPostAspectRatio = (value: number) => {
 };
 
 const getTradeTypeMeta = (value: unknown) => {
-  const normalized = String(value || "").trim().toLowerCase();
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
 
   if (normalized === "wts" || normalized === "sell" || normalized === "offer") {
     return {
@@ -70,7 +73,11 @@ const getTradeTypeMeta = (value: unknown) => {
     };
   }
 
-  if (normalized === "wtb" || normalized === "buy" || normalized === "request") {
+  if (
+    normalized === "wtb" ||
+    normalized === "buy" ||
+    normalized === "request"
+  ) {
     return {
       label: "Buy",
       bg: "#E8F5E9",
@@ -584,7 +591,9 @@ export const PostItem = ({
   const postId = item.main_post_id ?? item.id;
   const pageLink = `${CONFIG.APP_URL}/feed/post/${postId}`;
   const tradeTypeMeta = getTradeTypeMeta(tradingData?.type ?? item?.type);
-  const conditionMeta = getConditionMeta(tradingData?.condition ?? item?.condition);
+  const conditionMeta = getConditionMeta(
+    tradingData?.condition ?? item?.condition,
+  );
   const firstMediaAspectRatio = mediaAspectRatios[0] || 1;
   const fixedMediaHeight = IMAGE_WIDTH / firstMediaAspectRatio;
 
@@ -1081,8 +1090,12 @@ export const PostItem = ({
         </TouchableOpacity>
         <View style={styles.headerMetaRow}>
           {tradeTypeMeta ? (
-            <View style={[styles.typeBadge, { backgroundColor: tradeTypeMeta.bg }]}>
-              <Text style={[styles.typeBadgeText, { color: tradeTypeMeta.text }]}>
+            <View
+              style={[styles.typeBadge, { backgroundColor: tradeTypeMeta.bg }]}
+            >
+              <Text
+                style={[styles.typeBadgeText, { color: tradeTypeMeta.text }]}
+              >
                 {tradeTypeMeta.label}
               </Text>
             </View>
@@ -1099,8 +1112,18 @@ export const PostItem = ({
             {tradingData.product?.name || "Product"}
           </Text>
           {conditionMeta ? (
-            <View style={[styles.conditionBadge, { backgroundColor: conditionMeta.bg }]}>
-              <Text style={[styles.conditionBadgeText, { color: conditionMeta.text }]}>
+            <View
+              style={[
+                styles.conditionBadge,
+                { backgroundColor: conditionMeta.bg },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.conditionBadgeText,
+                  { color: conditionMeta.text },
+                ]}
+              >
                 {conditionMeta.label}
               </Text>
             </View>
@@ -1120,9 +1143,7 @@ export const PostItem = ({
           style={[styles.descriptionText, { color: theme.text }]}
           numberOfLines={3}
         >
-          {item.content ||
-            tradingData.ai_description ||
-            "No description provided."}
+          {item.content || tradingData.ai_description}
         </Text>
         <View style={styles.hashtagRow}>
           {item.hashtags?.map((h: any, index: number) => {
@@ -1415,7 +1436,7 @@ export const PostItem = ({
 };
 
 export default function NewsFeedScreen() {
-  const { isDark } = useTheme();
+  const { isDark, screenTheme } = useTheme();
   const router = useRouter();
   const { postId: routePostId, openComments } = useLocalSearchParams();
   const [sidebarVisible, setSidebarVisible] = useState(false);
@@ -1443,15 +1464,7 @@ export default function NewsFeedScreen() {
     setShouldOpenComments(openValue === "1" || openValue === "true");
   }, [openComments, routePostId]);
 
-  const theme = {
-    bg: isDark ? "#050609" : "#F8FAFC",
-    cardBg: isDark ? "#121721" : "#FFFFFF",
-    text: isDark ? "#F8FAFC" : "#1E293B",
-    subText: isDark ? "#94A3B8" : "#64748B",
-    primary: "#3B66F5",
-    border: isDark ? "#1F2937" : "#E2E8F0",
-    isDark,
-  };
+  const theme = screenTheme;
 
   const handleBookmark = useCallback(async (postId: number | string) => {
     if (!postId) return;
@@ -1528,53 +1541,57 @@ export default function NewsFeedScreen() {
         </TouchableOpacity>
       </View>
 
-      <FlatList
-        ref={feedListRef}
-        data={feed}
-        keyExtractor={(item) => item.id.toString()}
-        onRefresh={() => fetchFeed(1)}
-        refreshing={isLoading}
-        showsVerticalScrollIndicator={false}
-        onScrollToIndexFailed={handleScrollToIndexFailed}
-        ListHeaderComponent={
-          <TouchableOpacity
-            style={styles.broadcastBtnContainer}
-            activeOpacity={0.9}
-            onPress={() => router.push("/screens/BroadcastManager")}
-          >
-            <LinearGradient
-              colors={["#3B66F5", "#6366F1"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.broadcastBtnGradient}
+      {isLoading && feed.length === 0 ? (
+        <SkeletonLoader variant="feed" count={3} />
+      ) : (
+        <FlatList
+          ref={feedListRef}
+          data={feed}
+          keyExtractor={(item) => item.id.toString()}
+          onRefresh={() => fetchFeed(1)}
+          refreshing={isLoading}
+          showsVerticalScrollIndicator={false}
+          onScrollToIndexFailed={handleScrollToIndexFailed}
+          ListHeaderComponent={
+            <TouchableOpacity
+              style={styles.broadcastBtnContainer}
+              activeOpacity={0.9}
+              onPress={() => router.push("/screens/BroadcastManager")}
             >
-              <AiIcon fill="white" />
-              <Text style={styles.broadcastText}>Create Broadcast</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        }
-        renderItem={({ item, index }) => (
-          <View>
-            <PostItem
-              item={item}
-              theme={theme}
-              onSave={handleBookmark}
-              autoOpenPostId={shouldOpenComments ? targetPostId : null}
-              onAutoOpenHandled={() => setTargetPostId(null)}
-            />
-            {index === 0 ? (
-              <AdsCarousel
-                key={activeAd?.id ?? "ad"}
-                ad={activeAd}
+              <LinearGradient
+                colors={["#3B66F5", "#6366F1"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.broadcastBtnGradient}
+              >
+                <AiIcon fill="white" />
+                <Text style={styles.broadcastText}>Create Broadcast</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          }
+          renderItem={({ item, index }) => (
+            <View>
+              <PostItem
+                item={item}
                 theme={theme}
-                onPress={handleAdPress}
-                onFinished={handleAdFinished}
+                onSave={handleBookmark}
+                autoOpenPostId={shouldOpenComments ? targetPostId : null}
+                onAutoOpenHandled={() => setTargetPostId(null)}
               />
-            ) : null}
-          </View>
-        )}
-        ListFooterComponent={<View style={{ height: 100 }} />}
-      />
+              {index === 0 ? (
+                <AdsCarousel
+                  key={activeAd?.id ?? "ad"}
+                  ad={activeAd}
+                  theme={theme}
+                  onPress={handleAdPress}
+                  onFinished={handleAdFinished}
+                />
+              ) : null}
+            </View>
+          )}
+          ListFooterComponent={<View style={{ height: 100 }} />}
+        />
+      )}
       {sidebarVisible && (
         <SidebarOverlay
           visible={sidebarVisible}

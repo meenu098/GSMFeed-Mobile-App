@@ -17,16 +17,16 @@ import { useTheme } from "../../shared/themeContext";
 const { width, height } = Dimensions.get("window");
 
 const MembershipScreen = () => {
-  const { isDark } = useTheme();
+  const { isDark, screenTheme } = useTheme();
   const router = useRouter();
 
   const theme = {
-    bg: isDark ? "#0B0E14" : "#F8FAFC",
-    card: isDark ? "#121721" : "#FFFFFF",
-    text: isDark ? "#F8FAFC" : "#0F172A",
-    subText: isDark ? "#94A3B8" : "#64748B",
-    border: isDark ? "#1B2331" : "#E2E8F0",
-    primary: "#3B66F5",
+    bg: screenTheme.bg,
+    card: screenTheme.card,
+    text: screenTheme.text,
+    subText: screenTheme.subText,
+    border: screenTheme.border,
+    primary: screenTheme.primary,
   };
 
   const plans = [

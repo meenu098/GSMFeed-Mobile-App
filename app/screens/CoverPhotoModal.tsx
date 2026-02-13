@@ -23,13 +23,13 @@ const CoverEditModal = ({
   setZoom,
   onSave,
 }: any) => {
-  const { isDark } = useTheme();
+  const { screenTheme } = useTheme();
 
   const theme = {
-    card: isDark ? "#1E2530" : "#FFFFFF",
-    text: isDark ? "#F8FAFC" : "#0F172A",
-    subText: isDark ? "#94A3B8" : "#64748B",
-    primary: "#3B66F5",
+    card: screenTheme.card,
+    text: screenTheme.text,
+    subText: screenTheme.subText,
+    primary: screenTheme.primary,
     overlay: "rgba(0,0,0,0.9)",
   };
 

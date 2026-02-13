@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Stack, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, View } from "react-native";
+import SkeletonLoader from "../../../components/SkeletonLoader";
 import { parseStoredUser, resolveAuthenticatedRoute } from "../../../shared/authGate";
 
 export default function AuthLayout() {
@@ -31,11 +31,7 @@ export default function AuthLayout() {
   }, [router]);
 
   if (checking) {
-    return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-        <ActivityIndicator />
-      </View>
-    );
+    return <SkeletonLoader variant="form" withScroll={false} />;
   }
 
   return <Stack screenOptions={{ headerShown: false }} />;

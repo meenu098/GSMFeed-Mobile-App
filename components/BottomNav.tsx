@@ -2,10 +2,12 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
 import type { Href } from "expo-router";
 import { usePathname, useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
   Dimensions,
+  Easing,
   Image,
   StyleSheet,
   TouchableOpacity,
@@ -21,25 +23,29 @@ const { width } = Dimensions.get("window");
 export default function BottomNav() {
   const router = useRouter();
   const pathname = usePathname();
-  const { isDark } = useTheme();
+  const { isDark, colors, motion } = useTheme();
 
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [imgLoading, setImgLoading] = useState(false);
+  const entranceY = useRef(new Animated.Value(12)).current;
+  const entranceOpacity = useRef(new Animated.Value(0)).current;
 
   const themeColors = {
     gradient: isDark
       ? ([
           "rgba(11, 14, 20, 0.85)",
           "rgba(11, 14, 20, 0.95)",
-          "#0B0E14",
+          colors.background,
         ] as const)
       : ([
           "rgba(255,255,255,0.85)",
           "rgba(255,255,255,0.95)",
-          "#FFFFFF",
+          colors.background,
         ] as const),
-    inactiveIcon: isDark ? "#94A3B8" : "#64748B",
-    activeIcon: "#3B66F5",
+    inactiveIcon: colors.subText,
+    activeIcon: colors.primary,
+    avatarFallback: isDark ? "#263145" : "#CBD5E1",
+    loaderOverlay: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)",
   };
 
   const formatAvatarUrl = (url: string) => {
@@ -90,6 +96,23 @@ export default function BottomNav() {
     syncAvatar();
   }, []);
 
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(entranceY, {
+        toValue: 0,
+        duration: motion.normal,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(entranceOpacity, {
+        toValue: 1,
+        duration: motion.normal,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [entranceOpacity, entranceY, motion.normal]);
+
   const navItems = [
     { name: "Home", Icon: Home, route: "/screens/Newsfeed" as Href },
     { name: "Contacts", Icon: User, route: "/screens/Contacts" as Href },
@@ -103,7 +126,12 @@ export default function BottomNav() {
   ];
 
   return (
-    <View style={styles.container}>
+    <Animated.View
+      style={[
+        styles.container,
+        { opacity: entranceOpacity, transform: [{ translateY: entranceY }] },
+      ]}
+    >
       <LinearGradient
         colors={themeColors.gradient}
         locations={[0, 0.3, 1]}
@@ -133,6 +161,7 @@ export default function BottomNav() {
                   <View
                     style={[
                       styles.avatarContainer,
+                      { backgroundColor: themeColors.avatarFallback },
                       isActive && styles.avatarContainerActive,
                     ]}
                   >
@@ -150,7 +179,12 @@ export default function BottomNav() {
                         onError={() => setImgLoading(false)}
                       />
                       {imgLoading && (
-                        <View style={styles.loaderOverlay}>
+                        <View
+                          style={[
+                            styles.loaderOverlay,
+                            { backgroundColor: themeColors.loaderOverlay },
+                          ]}
+                        >
                           <ActivityIndicator
                             size="small"
                             color={themeColors.activeIcon}
@@ -185,7 +219,7 @@ export default function BottomNav() {
           })}
         </View>
       </LinearGradient>
-    </View>
+    </Animated.View>
   );
 }
 

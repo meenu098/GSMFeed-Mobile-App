@@ -73,16 +73,16 @@ const SectionHeader = ({
 );
 
 export default function SettingsScreen() {
-  const { isDark } = useTheme();
+  const { isDark, screenTheme } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [username, setUsername] = useState<string>("User");
 
   const theme = {
-    bg: isDark ? "#0F172A" : "#FFFFFF",
-    text: isDark ? "#FFF" : "#000",
-    border: isDark ? "#1E293B" : "#E2E8F0",
+    bg: screenTheme.bg,
+    text: screenTheme.text,
+    border: screenTheme.border,
   };
 
   useEffect(() => {
