@@ -1286,6 +1286,19 @@ export default function ProfileScreen() {
     [router],
   );
 
+  const handleAboutMePress = useCallback(() => {
+    const targetUserId = userData?.username || userData?.id;
+    if (!targetUserId) return;
+
+    router.push({
+      pathname: "/screens/AboutMe",
+      params: {
+        userId: String(targetUserId),
+        profileName: String(userData?.name || userData?.username || "User"),
+      },
+    });
+  }, [router, userData?.id, userData?.name, userData?.username]);
+
   if (loading)
     return (
       <View style={styles.centered}>
@@ -1334,21 +1347,44 @@ export default function ProfileScreen() {
           </View>
           <Text style={styles.handleText}>@{userData?.username}</Text>
 
-          {isOwnProfile ? (
-            <TouchableOpacity
-              onPress={() => router.push("/screens/EditProfile")}
-              style={styles.editBtnContainer}
-            >
-              <LinearGradient
-                colors={["#8B5CF6", "#6366F1"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.editBtn}
+          <View
+            style={[
+              styles.profileActionRow,
+              !isOwnProfile && styles.profileActionRowSingle,
+            ]}
+          >
+            {isOwnProfile ? (
+              <TouchableOpacity
+                onPress={() => router.push("/screens/EditProfile")}
+                style={styles.editBtnContainer}
               >
-                <Text style={styles.editBtnText}>Edit Profile</Text>
-              </LinearGradient>
+                <LinearGradient
+                  colors={["#8B5CF6", "#6366F1"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.editBtn}
+                >
+                  <Text style={styles.editBtnText}>Edit Profile</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            ) : null}
+            <TouchableOpacity
+              onPress={handleAboutMePress}
+              style={[
+                styles.aboutBtnContainer,
+                !isOwnProfile && styles.aboutBtnContainerSingle,
+                {
+                  borderColor: theme.border,
+                  backgroundColor: theme.card,
+                },
+              ]}
+            >
+              <Feather name="info" size={16} color={theme.primary} />
+              <Text style={[styles.aboutBtnText, { color: theme.text }]}>
+                About Me
+              </Text>
             </TouchableOpacity>
-          ) : null}
+          </View>
         </View>
 
         <View style={styles.statsRow}>
@@ -1443,9 +1479,33 @@ const styles = StyleSheet.create({
   },
   profileName: { fontSize: 20, fontWeight: "bold" },
   handleText: { color: "#3B66F5", fontSize: 14, marginTop: 2 },
-  editBtnContainer: { marginTop: 15, width: "45%" },
+  profileActionRow: {
+    marginTop: 15,
+    width: "92%",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  profileActionRowSingle: {
+    justifyContent: "center",
+  },
+  editBtnContainer: { width: "48%" },
   editBtn: { paddingVertical: 10, borderRadius: 20, alignItems: "center" },
   editBtnText: { color: "#FFF", fontWeight: "bold" },
+  aboutBtnContainer: {
+    width: "48%",
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 6,
+  },
+  aboutBtnContainerSingle: {
+    width: "58%",
+  },
+  aboutBtnText: { fontWeight: "700", fontSize: 14 },
   statsRow: {
     flexDirection: "row",
     justifyContent: "space-around",
