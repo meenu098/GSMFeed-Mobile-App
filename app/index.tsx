@@ -12,9 +12,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { OpenAISvg } from "../components/icons/bottomNavIcon";
 import FooterLinks from "../components/FooterLinks";
+import { OpenAISvg } from "../components/icons/bottomNavIcon";
 import WebSvg from "../components/WebSvg";
+import { parseStoredUser, resolveAuthenticatedRoute } from "../shared/authGate";
 import GradientText from "../shared/gradient";
 import ScreenWrapper from "../shared/screenWrapper";
 
@@ -28,9 +29,11 @@ const Index = () => {
     let mounted = true;
     const checkAuth = async () => {
       try {
-        const user = await AsyncStorage.getItem("user");
-        if (user) {
-          router.replace("/screens/Newsfeed");
+        const rawUser = await AsyncStorage.getItem("user");
+        const user = parseStoredUser(rawUser);
+        const nextRoute = resolveAuthenticatedRoute(user);
+        if (nextRoute !== "/screens/auth/Login") {
+          router.replace(nextRoute);
           return;
         }
       } finally {
@@ -121,7 +124,9 @@ const Index = () => {
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.primaryButton}
-                onPress={() => router.push("/screens/auth/Registration/stage-1")}
+                onPress={() =>
+                  router.push("/screens/auth/Registration/stage-1")
+                }
               >
                 <Text style={styles.primaryButtonText}>
                   Join now with free membership

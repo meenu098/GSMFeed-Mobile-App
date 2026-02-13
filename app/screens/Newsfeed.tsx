@@ -48,6 +48,16 @@ import { useTheme } from "../../shared/themeContext";
 const { width } = Dimensions.get("window");
 const CARD_WIDTH = width - 30;
 const IMAGE_WIDTH = CARD_WIDTH - 30;
+const POST_MIN_ASPECT_RATIO = 4 / 5;
+const POST_MAX_ASPECT_RATIO = 1.91; // Instagram landscape ceiling
+
+const clampPostAspectRatio = (value: number) => {
+  if (!Number.isFinite(value) || value <= 0) return 1;
+  return Math.min(
+    Math.max(value, POST_MIN_ASPECT_RATIO),
+    POST_MAX_ASPECT_RATIO,
+  );
+};
 
 const REACTION_TYPES = [
   { title: "like", Icon: LikeIcon, color: "#3B66F5" },
@@ -206,7 +216,7 @@ const AdsCarousel = ({
   onPress: (url: string) => void;
   onFinished: () => void;
 }) => {
-  const source = ad?.srcMobile ?? ad?.src ?? null;
+  const source = ad?.srcMobile ?? null;
   const player = useVideoPlayer(source, (player) => {
     player.muted = true;
     player.loop = false;
@@ -458,7 +468,13 @@ const CommentItem = ({
   );
 };
 
-const PostItem = ({ item, theme, onSave, autoOpenPostId, onAutoOpenHandled }: any) => {
+const PostItem = ({
+  item,
+  theme,
+  onSave,
+  autoOpenPostId,
+  onAutoOpenHandled,
+}: any) => {
   const router = useRouter();
   const [activeIndex, setActiveIndex] = useState(0);
   const resolveIsSaved = useCallback((value: any) => {
@@ -489,7 +505,9 @@ const PostItem = ({ item, theme, onSave, autoOpenPostId, onAutoOpenHandled }: an
   const [activeCommentPickerId, setActiveCommentPickerId] = useState<
     string | null
   >(null);
-  const [aspectRatio, setAspectRatio] = useState(1);
+  const [mediaAspectRatios, setMediaAspectRatios] = useState<
+    Record<number, number>
+  >({});
   // const mediaUrls = item.trading_feeds?.[0]?.images || item.media || [];
 
   const initialTotal =
@@ -509,6 +527,11 @@ const PostItem = ({ item, theme, onSave, autoOpenPostId, onAutoOpenHandled }: an
   const mediaUrls = tradingData.images || item.media || [];
   const postId = item.main_post_id ?? item.id;
   const pageLink = `${CONFIG.APP_URL}/feed/post/${postId}`;
+  const getMediaAspectRatio = useCallback(
+    (index: number) => mediaAspectRatios[index] || mediaAspectRatios[0] || 1,
+    [mediaAspectRatios],
+  );
+  const activeMediaHeight = IMAGE_WIDTH / getMediaAspectRatio(activeIndex);
 
   const handleProfilePress = () => {
     const username = author?.username || author?.user_name || author?.id;
@@ -516,19 +539,50 @@ const PostItem = ({ item, theme, onSave, autoOpenPostId, onAutoOpenHandled }: an
     router.push({ pathname: "/screens/Profile", params: { userId: username } });
   };
 
+  const handleHashtagPress = useCallback(
+    (value: unknown) => {
+      const rawTag = String(value ?? "").trim();
+      const normalizedTag = rawTag.replace(/^#/, "").trim();
+      if (!normalizedTag) return;
+
+      router.push({
+        pathname: "/screens/HashFeed",
+        params: { tag: normalizedTag },
+      });
+    },
+    [router],
+  );
+
   useEffect(() => {
-    if (mediaUrls.length > 0) {
+    let active = true;
+    const urls: string[] = item.trading_feeds?.[0]?.images || item.media || [];
+    setActiveIndex(0);
+    setMediaAspectRatios({});
+
+    urls.forEach((url: string, index: number) => {
+      if (!url) return;
       Image.getSize(
-        mediaUrls[0],
-        (width, height) => {
-          setAspectRatio(width / height);
+        url,
+        (mediaWidth, mediaHeight) => {
+          if (!active) return;
+          const ratio =
+            mediaWidth > 0 && mediaHeight > 0 ? mediaWidth / mediaHeight : 1;
+          setMediaAspectRatios((prev) => ({
+            ...prev,
+            [index]: clampPostAspectRatio(ratio),
+          }));
         },
-        (error) => {
-          console.warn("Failed to get image size", error);
+        () => {
+          if (!active) return;
+          setMediaAspectRatios((prev) => ({ ...prev, [index]: 1 }));
         },
       );
-    }
-  }, [mediaUrls]);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [item]);
 
   // API: Record Interaction Stat
   const postInteractStatTrigger = useCallback(async () => {
@@ -881,7 +935,7 @@ const PostItem = ({ item, theme, onSave, autoOpenPostId, onAutoOpenHandled }: an
   const renderMedia = () => {
     if (!mediaUrls || mediaUrls.length === 0) return null;
     return (
-      <View style={styles.imageWrapper}>
+      <View style={[styles.imageWrapper, { height: activeMediaHeight }]}>
         <FlatList
           data={mediaUrls}
           horizontal
@@ -890,14 +944,16 @@ const PostItem = ({ item, theme, onSave, autoOpenPostId, onAutoOpenHandled }: an
           scrollEventThrottle={16}
           showsHorizontalScrollIndicator={false}
           keyExtractor={(_, idx) => `img-${item.id}-${idx}`}
-          renderItem={({ item: url }) => (
-            <Image
-              source={{ uri: url }}
-              // Apply dynamic aspect ratio here
-              style={[styles.postImage, { aspectRatio: aspectRatio }]}
-              resizeMode="cover"
-            />
-          )}
+          renderItem={({ item: url, index }) => {
+            const imageHeight = IMAGE_WIDTH / getMediaAspectRatio(index);
+            return (
+              <Image
+                source={{ uri: url }}
+                style={[styles.postImage, { height: imageHeight }]}
+                resizeMode="cover"
+              />
+            );
+          }}
         />
         {mediaUrls.length > 1 ? (
           <View style={styles.pagination}>
@@ -1002,11 +1058,20 @@ const PostItem = ({ item, theme, onSave, autoOpenPostId, onAutoOpenHandled }: an
             "No description provided."}
         </Text>
         <View style={styles.hashtagRow}>
-          {item.hashtags?.map((h: any) => (
-            <Text key={h.id} style={styles.hashtag}>
-              #{h.name}{" "}
-            </Text>
-          ))}
+          {item.hashtags?.map((h: any, index: number) => {
+            const tagName = String(h?.name ?? h ?? "").trim();
+            if (!tagName) return null;
+
+            return (
+              <Text
+                key={String(h?.id ?? `${tagName}-${index}`)}
+                style={styles.hashtag}
+                onPress={() => handleHashtagPress(tagName)}
+              >
+                #{tagName}
+              </Text>
+            );
+          })}
         </View>
       </View>
 
@@ -1545,9 +1610,9 @@ const styles = StyleSheet.create({
     marginTop: 15,
     borderRadius: 15,
     overflow: "hidden",
-    width: "100%", // Ensure it takes full card width
+    width: "100%",
   },
-  postImage: { width: CARD_WIDTH - 30, height: 260 },
+  postImage: { width: IMAGE_WIDTH },
   pagination: {
     position: "absolute",
     bottom: 10,

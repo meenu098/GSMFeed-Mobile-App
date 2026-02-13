@@ -12,6 +12,20 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { resolveAuthenticatedRoute } from "../shared/authGate";
+import CONFIG from "../shared/config";
+import { getUser, setUser } from "../shared/storage";
+
+const hasPrimaryAccess = (user: any) => {
+  const value = user?.has_account_primary_access;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    return normalized === "1" || normalized === "true" || normalized === "yes";
+  }
+  return false;
+};
 
 export default function UnderReviewScreen() {
   const router = useRouter();
@@ -33,6 +47,74 @@ export default function UnderReviewScreen() {
       ]),
     ).start();
   }, [scaleAnim]);
+
+  useEffect(() => {
+    let active = true;
+
+    const syncUserAndRoute = async () => {
+      const storedUser = await getUser();
+      if (!storedUser || !active) return;
+
+      if (hasPrimaryAccess(storedUser)) {
+        router.replace("/screens/Newsfeed");
+        return;
+      }
+
+      const routeFromStored = resolveAuthenticatedRoute(storedUser);
+      if (routeFromStored !== "/under-review") {
+        router.replace(routeFromStored);
+        return;
+      }
+
+      if (!storedUser?.token) return;
+
+      try {
+        const response = await fetch(
+          `${CONFIG.API_ENDPOINT}/api/auth/get-auth-data`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${storedUser.token}`,
+              Accept: "application/json",
+            },
+          },
+        );
+        const result = await response.json();
+
+        if (response.ok && result?.status && result?.data) {
+          const mergedUser = {
+            ...storedUser,
+            ...result.data,
+            token: storedUser.token,
+            refresh_token: storedUser.refresh_token,
+          };
+
+          await setUser(mergedUser);
+          if (!active) return;
+
+          if (hasPrimaryAccess(mergedUser)) {
+            router.replace("/screens/Newsfeed");
+            return;
+          }
+
+          const nextRoute = resolveAuthenticatedRoute(mergedUser);
+          if (nextRoute !== "/under-review") {
+            router.replace(nextRoute);
+          }
+        }
+      } catch {
+        // Keep user on under-review when revalidation fails.
+      }
+    };
+
+    syncUserAndRoute();
+    const timer = setInterval(syncUserAndRoute, 15000);
+
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [router]);
 
   const handleBackToLogin = () => {
     router.replace("/screens/auth/Login");
@@ -85,29 +167,6 @@ export default function UnderReviewScreen() {
                 />
                 <Text style={styles.backBtnText}>Back to Login</Text>
               </TouchableOpacity>
-            </View>
-          </BlurView>
-        </View>
-
-        {/* PREMIUM UPSELL CARD */}
-        <View style={[styles.glassWrapper, styles.premiumMargin]}>
-          <BlurView
-            intensity={Platform.OS === "ios" ? 60 : 100}
-            tint="dark"
-            style={styles.blurContainer}
-          >
-            <View style={styles.innerCard}>
-              <Text style={styles.premiumLabel}>
-                Instant access, No waiting!
-              </Text>
-              <Text style={styles.premiumTitle}>Purchase our premium plan</Text>
-
-              <Animated.View
-                style={[
-                  styles.buttonContainer,
-                  { transform: [{ scale: scaleAnim }] },
-                ]}
-              ></Animated.View>
             </View>
           </BlurView>
         </View>

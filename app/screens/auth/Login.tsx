@@ -17,6 +17,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import FooterLinks from "../../../components/FooterLinks";
+import { resolveAuthenticatedRoute } from "../../../shared/authGate";
 import CONFIG from "../../../shared/config";
 import { setUser } from "../../../shared/storage";
 // Import your theme context
@@ -80,7 +81,7 @@ const Login = () => {
         return;
       }
       await setUser(data.data);
-      router.replace("/screens/Newsfeed");
+      router.replace(resolveAuthenticatedRoute(data?.data));
     } catch (error) {
       Alert.alert("Network Error", "Unable to connect to server.");
     } finally {

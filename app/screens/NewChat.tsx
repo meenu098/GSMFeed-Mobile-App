@@ -153,6 +153,7 @@ export default function NewChatScreen() {
           params: {
             chatId: String(createdChatId),
             chatName: selectedUser.name,
+            chatAvatar: selectedUser.avatar || "",
             initialMessage: message.trim(),
           },
         });

@@ -6,8 +6,10 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   AppState,
   FlatList,
+  Image,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -62,8 +64,10 @@ export default function IndividualChatScreen() {
   const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { chatId, chatName, initialMessage } = useLocalSearchParams();
+  const { chatId, chatName, chatAvatar, initialMessage } = useLocalSearchParams();
   const chatIdValue = Array.isArray(chatId) ? chatId[0] : chatId;
+  const chatNameValue = Array.isArray(chatName) ? chatName[0] : chatName;
+  const chatAvatarValue = Array.isArray(chatAvatar) ? chatAvatar[0] : chatAvatar;
   const log = (...args: any[]) => {
     if (__DEV__) console.log(...args);
   };
@@ -71,6 +75,7 @@ export default function IndividualChatScreen() {
   const [inputText, setInputText] = useState("");
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+  const [deletingChat, setDeletingChat] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollingInFlightRef = useRef(false);
@@ -91,6 +96,13 @@ export default function IndividualChatScreen() {
       : Array.isArray(initialMessage)
         ? initialMessage[0] || ""
         : "";
+
+  const headerAvatarUri =
+    typeof chatAvatarValue === "string" && chatAvatarValue.trim()
+      ? chatAvatarValue.trim()
+      : `https://ui-avatars.com/api/?name=${encodeURIComponent(
+          chatNameValue || "User",
+        )}&background=3B66F5&color=fff`;
 
   useEffect(() => {
     log("[chat] params", { chatId, chatIdValue, chatName });
@@ -282,6 +294,64 @@ export default function IndividualChatScreen() {
     }
   }, []);
 
+  const deleteChat = useCallback(async () => {
+    if (!chatIdValue || deletingChat) return;
+
+    setDeletingChat(true);
+    try {
+      const userString = await AsyncStorage.getItem("user");
+      if (!userString) {
+        router.replace("/screens/ChatItem");
+        return;
+      }
+      const user = JSON.parse(userString);
+
+      const response = await fetch(
+        `${CONFIG.API_ENDPOINT}/api/gsmfeed-chat/delete-chat`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${user?.token}`,
+          },
+          body: JSON.stringify({ chat_id: String(chatIdValue) }),
+        },
+      );
+      const json = await response.json();
+
+      if (response.ok && json?.status) {
+        stopPolling();
+        router.replace("/screens/ChatItem");
+        return;
+      }
+
+      Alert.alert("Delete failed", json?.message || "Unable to delete chat.");
+    } catch {
+      Alert.alert("Error", "Unable to delete chat right now.");
+    } finally {
+      setDeletingChat(false);
+    }
+  }, [chatIdValue, deletingChat, router, stopPolling]);
+
+  const handleDeleteChatPress = useCallback(() => {
+    if (!chatIdValue || deletingChat) return;
+
+    Alert.alert(
+      "Delete Chat",
+      "Are you sure you want to delete this conversation?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            void deleteChat();
+          },
+        },
+      ],
+    );
+  }, [chatIdValue, deleteChat, deletingChat]);
+
   useEffect(() => {
     if (!chatIdValue) return;
     startPolling();
@@ -356,10 +426,22 @@ export default function IndividualChatScreen() {
           <Feather name="chevron-left" size={28} color={theme.text} />
         </TouchableOpacity>
         <View style={styles.headerUser}>
+          <Image source={{ uri: headerAvatarUri }} style={styles.headerAvatar} />
           <Text style={[styles.headerName, { color: theme.text }]}>
-            {chatName}
+            {chatNameValue}
           </Text>
         </View>
+        <TouchableOpacity
+          onPress={handleDeleteChatPress}
+          style={styles.headerDeleteBtn}
+          disabled={deletingChat}
+        >
+          {deletingChat ? (
+            <ActivityIndicator size="small" color={theme.subText} />
+          ) : (
+            <Feather name="trash-2" size={19} color={theme.subText} />
+          )}
+        </TouchableOpacity>
       </View>
       {loading ? (
         <ActivityIndicator style={{ flex: 1 }} color={theme.primary} />
@@ -433,8 +515,22 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   backBtn: { paddingRight: 10 },
-  headerUser: { flex: 1 },
-  headerName: { fontSize: 17, fontWeight: "700" },
+  headerUser: { flex: 1, flexDirection: "row", alignItems: "center" },
+  headerAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    marginRight: 10,
+    backgroundColor: "#E2E8F0",
+  },
+  headerName: { fontSize: 17, fontWeight: "700", flexShrink: 1 },
+  headerDeleteBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   listContent: { padding: 15 },
   messageRow: { flexDirection: "row", marginBottom: 12, gap: 10 },
   myRow: { justifyContent: "flex-end" },

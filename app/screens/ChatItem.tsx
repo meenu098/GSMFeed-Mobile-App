@@ -5,6 +5,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   AppState,
   FlatList,
   Image,
@@ -38,7 +39,13 @@ interface Chat {
 
 const CHAT_LIST_POLL_MS = 8000;
 
-const ChatItem = ({ item, theme, currentUserId }: any) => {
+const ChatItem = ({
+  item,
+  theme,
+  currentUserId,
+  onRequestDelete,
+  isDeleting,
+}: any) => {
   const router = useRouter();
 
   // Logic to determine chat name for 1-on-1 vs Group
@@ -60,14 +67,24 @@ const ChatItem = ({ item, theme, currentUserId }: any) => {
     }
   }
 
+  const handleDeletePress = () => {
+    onRequestDelete?.(String(item.id), displayChatName);
+  };
+
   return (
     <TouchableOpacity
       onPress={() =>
         router.push({
           pathname: "/screens/MessageBubble",
-          params: { chatId: item.id.toString(), chatName: displayChatName },
+          params: {
+            chatId: item.id.toString(),
+            chatName: displayChatName,
+            chatAvatar: item.chat_avatar || "",
+          },
         })
       }
+      onLongPress={handleDeletePress}
+      delayLongPress={350}
       style={[
         styles.chatCard,
         { backgroundColor: theme.card, borderColor: theme.border },
@@ -93,13 +110,26 @@ const ChatItem = ({ item, theme, currentUserId }: any) => {
           >
             {item.last_message?.content || "No messages yet"}
           </Text>
-          {item.unread_messages > 0 && (
-            <View
-              style={[styles.unreadBadge, { backgroundColor: theme.primary }]}
+          <View style={styles.rowActions}>
+            {item.unread_messages > 0 && (
+              <View
+                style={[styles.unreadBadge, { backgroundColor: theme.primary }]}
+              >
+                <Text style={styles.unreadText}>{item.unread_messages}</Text>
+              </View>
+            )}
+            <TouchableOpacity
+              onPress={handleDeletePress}
+              disabled={isDeleting}
+              style={styles.deleteBtn}
             >
-              <Text style={styles.unreadText}>{item.unread_messages}</Text>
-            </View>
-          )}
+              {isDeleting ? (
+                <ActivityIndicator size="small" color={theme.subText} />
+              ) : (
+                <Feather name="trash-2" size={16} color={theme.subText} />
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </TouchableOpacity>
@@ -121,6 +151,7 @@ export default function ChatScreen() {
   const visibleChatIdsRef = useRef<string[]>([]);
   const latestChatsRef = useRef<Chat[]>([]);
   const chatsRef = useRef<Chat[]>([]);
+  const [deletingChatIds, setDeletingChatIds] = useState<string[]>([]);
 
   // Search States
   const [isSearching, setIsSearching] = useState(false);
@@ -222,6 +253,84 @@ export default function ChatScreen() {
       }
     },
     [shouldUpdateVisible],
+  );
+
+  const removeChatLocally = useCallback((chatId: string) => {
+    const normalizedId = String(chatId);
+
+    setChats((prev) => prev.filter((chat) => String(chat.id) !== normalizedId));
+    latestChatsRef.current = latestChatsRef.current.filter(
+      (chat) => String(chat.id) !== normalizedId,
+    );
+    chatsRef.current = chatsRef.current.filter(
+      (chat) => String(chat.id) !== normalizedId,
+    );
+    visibleChatIdsRef.current = visibleChatIdsRef.current.filter(
+      (id) => String(id) !== normalizedId,
+    );
+  }, []);
+
+  const deleteChatById = useCallback(
+    async (chatId: string) => {
+      const normalizedId = String(chatId);
+      if (!normalizedId) return;
+      if (deletingChatIds.includes(normalizedId)) return;
+
+      setDeletingChatIds((prev) =>
+        prev.includes(normalizedId) ? prev : [...prev, normalizedId],
+      );
+      try {
+        const userString = await AsyncStorage.getItem("user");
+        if (!userString) return;
+        const user = JSON.parse(userString);
+
+        const response = await fetch(
+          `${CONFIG.API_ENDPOINT}/api/gsmfeed-chat/delete-chat`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${user?.token}`,
+            },
+            body: JSON.stringify({ chat_id: normalizedId }),
+          },
+        );
+
+        const json = await response.json();
+        if (response.ok && json?.status) {
+          removeChatLocally(normalizedId);
+          return;
+        }
+
+        Alert.alert("Delete failed", json?.message || "Unable to delete chat.");
+      } catch {
+        Alert.alert("Error", "Unable to delete chat right now.");
+      } finally {
+        setDeletingChatIds((prev) => prev.filter((id) => id !== normalizedId));
+      }
+    },
+    [deletingChatIds, removeChatLocally],
+  );
+
+  const requestDeleteChat = useCallback(
+    (chatId: string, chatName?: string) => {
+      const label = chatName || "this chat";
+      Alert.alert(
+        "Delete Chat",
+        `Are you sure you want to delete ${label}?`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Delete",
+            style: "destructive",
+            onPress: () => {
+              void deleteChatById(chatId);
+            },
+          },
+        ],
+      );
+    },
+    [deleteChatById],
   );
 
   const fetchChats = useCallback(async () => {
@@ -373,7 +482,13 @@ export default function ChatScreen() {
           data={filteredChats}
           keyExtractor={(item) => item.id.toString()}
           renderItem={({ item }) => (
-            <ChatItem item={item} theme={theme} currentUserId={currentUserId} />
+            <ChatItem
+              item={item}
+              theme={theme}
+              currentUserId={currentUserId}
+              onRequestDelete={requestDeleteChat}
+              isDeleting={deletingChatIds.includes(String(item.id))}
+            />
           )}
           onViewableItemsChanged={onViewableItemsChanged.current}
           viewabilityConfig={viewabilityConfig.current}
@@ -465,6 +580,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
+  rowActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   name: { fontSize: 16, fontWeight: "700" },
   messagePreview: { fontSize: 14, flex: 1, paddingRight: 10 },
   timeText: { fontSize: 12, fontWeight: "500" },
@@ -477,6 +597,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
   unreadText: { color: "#FFF", fontSize: 10, fontWeight: "800" },
+  deleteBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   centered: {
     flex: 1,
     justifyContent: "center",
