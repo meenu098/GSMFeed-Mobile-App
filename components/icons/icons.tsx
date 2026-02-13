@@ -4,7 +4,9 @@ import {
   ClipPath,
   Defs,
   G,
+  Line,
   Path,
+  Polyline,
   Svg,
   SvgProps,
 } from "react-native-svg";
@@ -414,6 +416,91 @@ const CalendarIcon = ({ color = "#000", ...props }: IconProps) => {
   );
 };
 
+const ThumpsUpIcon = ({ color = "#000", ...props }: IconProps) => {
+  return (
+    <Svg
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      {...props}
+    >
+      <Path
+        d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"
+        fill={props.fill || color}
+      />
+    </Svg>
+  );
+};
+
+const CommentIcon = ({ color = "#000", ...props }: IconProps) => {
+  return (
+    <Svg
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      {...props}
+    >
+      <Path
+        d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+        fill={props.fill || color}
+      ></Path>
+    </Svg>
+  );
+};
+
+const ShareIcon = ({ color = "#000", ...props }: IconProps) => {
+  return (
+    <Svg
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      {...props}
+    >
+      <Path
+        d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"
+        fill={props.fill || color}
+      />
+      <Polyline points="16 6 12 2 8 6" fill={props.fill || color} />
+      <Line x1="12" y1="2" x2="12" y2="15" fill={props.stroke || color} />
+    </Svg>
+  );
+};
+const SaveIcon = ({ color = "#000", ...props }: IconProps) => {
+  return (
+    <Svg
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      {...props}
+    >
+      <Path
+        d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"
+        fill={props.fill || color}
+      ></Path>
+    </Svg>
+  );
+};
+
 export {
   AiIcon,
   Bio,
@@ -421,10 +508,14 @@ export {
   BusinessMan,
   CalendarIcon,
   CloseIcon,
+  CommentIcon,
   CompanySvg,
   Email,
   Location,
   Phone,
+  SaveIcon,
+  ShareIcon,
+  ThumpsUpIcon,
   WTBIcon,
   WTSIcon,
 };

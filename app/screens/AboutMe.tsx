@@ -10,6 +10,7 @@ import {
   StatusBar,
   StyleSheet,
   Text,
+  TouchableWithoutFeedback,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -146,33 +147,78 @@ const getAboutRows = (data: any) => [
   },
 ];
 
+const normalizePlanName = (value: unknown) => String(value || "").trim().toLowerCase();
+
+const isPremiumPlan = (user: any) => {
+  const planName = normalizePlanName(user?.subscription?.name);
+  if (!planName) return false;
+  return planName !== "starter";
+};
+
+const maskSensitiveValue = (value: string) => {
+  const safeValue = String(value || "").trim();
+  if (!safeValue || safeValue.toLowerCase() === "not added") return "Not added";
+  return "••••••••••••";
+};
+
 const AboutRow = ({
   Icon,
   title,
   value,
   theme,
   showDivider,
+  locked,
+  warningVisible,
+  onLockedPress,
 }: {
   Icon: React.ComponentType<any>;
   title: string;
   value: string;
   theme: any;
   showDivider?: boolean;
+  locked?: boolean;
+  warningVisible?: boolean;
+  onLockedPress?: () => void;
 }) => (
-  <View
-    style={[
-      styles.infoRow,
-      showDivider && { borderBottomWidth: 1, borderBottomColor: theme.border },
-    ]}
+  <TouchableWithoutFeedback
+    onPress={() => {
+      if (!locked) return;
+      onLockedPress?.();
+    }}
   >
-    <View style={styles.iconBox}>
-      <Icon width={24} height={24} fill={theme.icon} color={theme.icon} />
+    <View
+      style={[
+        styles.infoRow,
+        showDivider && { borderBottomWidth: 1, borderBottomColor: theme.border },
+      ]}
+    >
+      <View style={styles.iconBox}>
+        <Icon width={24} height={24} fill={theme.icon} color={theme.icon} />
+      </View>
+      <View style={styles.infoTextWrap}>
+        <Text style={[styles.infoTitle, { color: theme.titleText }]}>{title}</Text>
+        <Text
+          style={[
+            styles.infoValue,
+            { color: theme.valueText },
+            locked && styles.lockedValue,
+          ]}
+        >
+          {value}
+        </Text>
+        {warningVisible ? (
+          <View style={styles.warningWrap}>
+            <View style={styles.warningBox}>
+              <Text style={styles.warningText}>
+                These details are only available for Premium members
+              </Text>
+            </View>
+            <View style={styles.warningArrow} />
+          </View>
+        ) : null}
+      </View>
     </View>
-    <View style={styles.infoTextWrap}>
-      <Text style={[styles.infoTitle, { color: theme.titleText }]}>{title}</Text>
-      <Text style={[styles.infoValue, { color: theme.valueText }]}>{value}</Text>
-    </View>
-  </View>
+  </TouchableWithoutFeedback>
 );
 
 export default function AboutMeScreen() {
@@ -186,6 +232,7 @@ export default function AboutMeScreen() {
     details: {},
     personal: {},
   });
+  const [lockedFieldWarning, setLockedFieldWarning] = useState<string | null>(null);
 
   const theme = {
     bg: isDark ? "#0B0E14" : "#F8FAFC",
@@ -266,6 +313,45 @@ export default function AboutMeScreen() {
 
   const rows = useMemo(() => getAboutRows(mergedData), [mergedData]);
 
+  const targetUserId = useMemo(
+    () => (Array.isArray(userId) ? userId[0] : userId),
+    [userId],
+  );
+
+  const isOwnProfile = useMemo(() => {
+    const viewer = aboutData?.storedUser;
+    if (!viewer) return false;
+    if (!targetUserId) return true;
+    return (
+      String(targetUserId) === String(viewer?.id) ||
+      String(targetUserId) === String(viewer?.username)
+    );
+  }, [aboutData?.storedUser, targetUserId]);
+
+  const viewedProfileIsVerified = useMemo(() => {
+    const verifiedValue =
+      mergedData?.is_verified ?? mergedData?.verified ?? mergedData?.kyc ?? 0;
+    return Number(verifiedValue) === 1 || verifiedValue === true;
+  }, [mergedData]);
+
+  const viewerIsPremium = useMemo(
+    () => isPremiumPlan(aboutData?.storedUser),
+    [aboutData?.storedUser],
+  );
+
+  const shouldGatePremiumDetails = useMemo(
+    () => viewedProfileIsVerified && !viewerIsPremium && !isOwnProfile,
+    [isOwnProfile, viewedProfileIsVerified, viewerIsPremium],
+  );
+
+  useEffect(() => {
+    if (!lockedFieldWarning) return;
+    const timeout = setTimeout(() => {
+      setLockedFieldWarning(null);
+    }, 2500);
+    return () => clearTimeout(timeout);
+  }, [lockedFieldWarning]);
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
@@ -289,16 +375,28 @@ export default function AboutMeScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
-          {rows.map((row, index) => (
-            <AboutRow
-              key={row.title}
-              Icon={row.Icon}
-              title={row.title}
-              value={String(row.value || "Not added")}
-              showDivider={index < rows.length - 1}
-              theme={theme}
-            />
-          ))}
+          {rows.map((row, index) => {
+            const rowKey = row.title.toLowerCase();
+            const isSensitiveRow = rowKey === "mobile" || rowKey === "email";
+            const locked = shouldGatePremiumDetails && isSensitiveRow;
+            const valueToShow = locked
+              ? maskSensitiveValue(String(row.value || ""))
+              : String(row.value || "Not added");
+
+            return (
+              <AboutRow
+                key={row.title}
+                Icon={row.Icon}
+                title={row.title}
+                value={valueToShow}
+                showDivider={index < rows.length - 1}
+                theme={theme}
+                locked={locked}
+                warningVisible={locked && lockedFieldWarning === rowKey}
+                onLockedPress={() => setLockedFieldWarning(rowKey)}
+              />
+            );
+          })}
         </ScrollView>
       )}
     </SafeAreaView>
@@ -352,5 +450,38 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "500",
     lineHeight: 24,
+  },
+  lockedValue: {
+    letterSpacing: 1.2,
+  },
+  warningWrap: {
+    marginTop: 8,
+    alignItems: "center",
+    width: "100%",
+  },
+  warningBox: {
+    backgroundColor: "#121317",
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    maxWidth: 280,
+  },
+  warningText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "600",
+    textAlign: "center",
+    lineHeight: 18,
+  },
+  warningArrow: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 8,
+    borderRightWidth: 8,
+    borderTopWidth: 9,
+    borderLeftColor: "transparent",
+    borderRightColor: "transparent",
+    borderTopColor: "#121317",
+    marginTop: -1,
   },
 });
