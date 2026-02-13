@@ -10,6 +10,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Clipboard,
   Dimensions,
   FlatList,
@@ -48,7 +49,72 @@ const POST_MAX_ASPECT_RATIO = 1.91; // Instagram landscape ceiling
 
 const clampPostAspectRatio = (value: number) => {
   if (!Number.isFinite(value) || value <= 0) return 1;
-  return Math.min(Math.max(value, POST_MIN_ASPECT_RATIO), POST_MAX_ASPECT_RATIO);
+  return Math.min(
+    Math.max(value, POST_MIN_ASPECT_RATIO),
+    POST_MAX_ASPECT_RATIO,
+  );
+};
+
+const getTradeTypeMeta = (value: unknown) => {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+
+  if (normalized === "wts" || normalized === "sell" || normalized === "offer") {
+    return {
+      label: "Sell",
+      bg: "#EEF2FF",
+      text: "#6366F1",
+    };
+  }
+
+  if (
+    normalized === "wtb" ||
+    normalized === "buy" ||
+    normalized === "request"
+  ) {
+    return {
+      label: "Buy",
+      bg: "#E8F5E9",
+      text: "#2E7D32",
+    };
+  }
+
+  return null;
+};
+
+const getConditionMeta = (value: unknown) => {
+  const raw =
+    typeof value === "string"
+      ? value
+      : value && typeof value === "object"
+        ? String((value as any)?.name ?? (value as any)?.label ?? "")
+        : "";
+  const normalized = raw.trim().toLowerCase();
+
+  if (!normalized) return null;
+
+  if (normalized === "used") {
+    return {
+      label: "Used",
+      bg: "#FDEBD7",
+      text: "#D97706",
+    };
+  }
+
+  if (normalized === "new") {
+    return {
+      label: "New",
+      bg: "#E8F5E9",
+      text: "#2E7D32",
+    };
+  }
+
+  return {
+    label: normalized.charAt(0).toUpperCase() + normalized.slice(1),
+    bg: "#EEF2FF",
+    text: "#6366F1",
+  };
 };
 
 const REACTION_TYPES = [
@@ -59,6 +125,24 @@ const REACTION_TYPES = [
   { title: "sad", Icon: SadIcon, color: "#FBBF24" },
   { title: "angry", Icon: AngryIcon, color: "#EA580C" },
 ];
+
+const isTruthyFollow = (value: unknown) => {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    return normalized === "1" || normalized === "true" || normalized === "yes";
+  }
+  return false;
+};
+
+const resolveFollowState = (profile: any) => {
+  if (isTruthyFollow(profile?.followedByMe)) return true;
+  if (isTruthyFollow(profile?.is_following)) return true;
+  if (isTruthyFollow(profile?.is_followed)) return true;
+  if (isTruthyFollow(profile?.followed)) return true;
+  return false;
+};
 
 const stripHtml = (value: string) => {
   if (!value) return "";
@@ -71,10 +155,7 @@ const stripHtml = (value: string) => {
 };
 
 const escapeHtml = (value: string) =>
-  value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+  value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 const escapeRegex = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -106,9 +187,7 @@ const buildCommentHtml = (
 
   const hasReplyMention =
     replyUsername &&
-    new RegExp(`(^|\\s)@${escapeRegex(replyUsername)}(\\s|$)`, "i").test(
-      value,
-    );
+    new RegExp(`(^|\\s)@${escapeRegex(replyUsername)}(\\s|$)`, "i").test(value);
   if (replyUsername && !hasReplyMention) {
     const mentionId = mentionIdMap.get(replyUsername);
     const prefix = buildMentionAnchor(replyUsername, mentionId);
@@ -347,7 +426,7 @@ const CommentItem = ({
   );
 };
 
-const PostItem = ({ item, theme, onSave }: any) => {
+const PostItem = ({ item, theme, onSave, canDelete, onDeletePost }: any) => {
   const router = useRouter();
   const [activeIndex, setActiveIndex] = useState(0);
   const resolveIsSaved = useCallback((value: any) => {
@@ -358,6 +437,8 @@ const PostItem = ({ item, theme, onSave }: any) => {
   }, []);
   const [isSaved, setIsSaved] = useState(resolveIsSaved(item.is_saved));
   const [shareVisible, setShareVisible] = useState(false);
+  const [postMenuVisible, setPostMenuVisible] = useState(false);
+  const [deletingPost, setDeletingPost] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const [myReaction, setMyReaction] = useState(item.my_reaction);
@@ -371,13 +452,13 @@ const PostItem = ({ item, theme, onSave }: any) => {
   const [replyLoadingMap, setReplyLoadingMap] = useState<
     Record<string, boolean>
   >({});
-  const [replyNextMap, setReplyNextMap] = useState<Record<string, string | null>>(
-    {},
-  );
+  const [replyNextMap, setReplyNextMap] = useState<
+    Record<string, string | null>
+  >({});
   const [replyPageMap, setReplyPageMap] = useState<Record<string, number>>({});
-  const [activeCommentPickerId, setActiveCommentPickerId] = useState<string | null>(
-    null,
-  );
+  const [activeCommentPickerId, setActiveCommentPickerId] = useState<
+    string | null
+  >(null);
   const [mediaAspectRatios, setMediaAspectRatios] = useState<
     Record<number, number>
   >({});
@@ -392,20 +473,21 @@ const PostItem = ({ item, theme, onSave }: any) => {
     typeof item.total_comments === "object"
       ? item.total_comments?.total || 0
       : item.total_comments || 0;
-  const [commentCount, setCommentCount] = useState<number>(
-    initialCommentsCount,
-  );
+  const [commentCount, setCommentCount] =
+    useState<number>(initialCommentsCount);
 
   const tradingData = item.trading_feeds?.[0] || {};
   const author = item.author || {};
   const mediaUrls = tradingData.images || item.media || [];
   const postId = item.main_post_id ?? item.id;
+  const deletePostId = item.id ?? item.main_post_id ?? postId;
   const pageLink = `${CONFIG.APP_URL}/feed/post/${postId}`;
-  const getMediaAspectRatio = useCallback(
-    (index: number) => mediaAspectRatios[index] || mediaAspectRatios[0] || 1,
-    [mediaAspectRatios],
+  const tradeTypeMeta = getTradeTypeMeta(tradingData?.type ?? item?.type);
+  const conditionMeta = getConditionMeta(
+    tradingData?.condition ?? item?.condition,
   );
-  const activeMediaHeight = IMAGE_WIDTH / getMediaAspectRatio(activeIndex);
+  const firstMediaAspectRatio = mediaAspectRatios[0] || 1;
+  const fixedMediaHeight = IMAGE_WIDTH / firstMediaAspectRatio;
 
   const handleProfilePress = () => {
     const username = author?.username || author?.user_name || author?.id;
@@ -419,25 +501,22 @@ const PostItem = ({ item, theme, onSave }: any) => {
     setActiveIndex(0);
     setMediaAspectRatios({});
 
-    urls.forEach((url: string, index: number) => {
-      if (!url) return;
+    const firstUrl = urls[0];
+    if (firstUrl) {
       Image.getSize(
-        url,
+        firstUrl,
         (mediaWidth, mediaHeight) => {
           if (!active) return;
           const ratio =
             mediaWidth > 0 && mediaHeight > 0 ? mediaWidth / mediaHeight : 1;
-          setMediaAspectRatios((prev) => ({
-            ...prev,
-            [index]: clampPostAspectRatio(ratio),
-          }));
+          setMediaAspectRatios({ 0: clampPostAspectRatio(ratio) });
         },
         () => {
           if (!active) return;
-          setMediaAspectRatios((prev) => ({ ...prev, [index]: 1 }));
+          setMediaAspectRatios({ 0: 1 });
         },
       );
-    });
+    }
 
     return () => {
       active = false;
@@ -498,6 +577,72 @@ const PostItem = ({ item, theme, onSave }: any) => {
     },
     [pageLink],
   );
+
+  const executeDeletePost = useCallback(async () => {
+    if (!deletePostId || deletingPost) return;
+
+    try {
+      setDeletingPost(true);
+      const userString = await AsyncStorage.getItem("user");
+      if (!userString) {
+        Alert.alert("Error", "You are not logged in.");
+        return;
+      }
+
+      const user = JSON.parse(userString);
+      const url = `${CONFIG.API_ENDPOINT}/api/feed/delete-post/${deletePostId}`;
+      let response = await fetch(url, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${user?.token}`,
+        },
+      });
+
+      if (response.status === 405) {
+        response = await fetch(url, {
+          method: "DELETE",
+          headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${user?.token}`,
+          },
+        });
+      }
+
+      let json: any = {};
+      try {
+        json = await response.json();
+      } catch {
+        json = {};
+      }
+
+      if (response.ok && (json?.status ?? true)) {
+        setPostMenuVisible(false);
+        onDeletePost?.(deletePostId, item);
+      } else {
+        Alert.alert("Delete failed", json?.message || "Unable to delete post.");
+      }
+    } catch {
+      Alert.alert("Error", "Unable to delete post right now.");
+    } finally {
+      setDeletingPost(false);
+    }
+  }, [deletePostId, deletingPost, item, onDeletePost]);
+
+  const confirmDeletePost = useCallback(() => {
+    if (!canDelete) return;
+    setPostMenuVisible(false);
+    Alert.alert("Delete post", "Are you sure you want to delete this post?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => {
+          void executeDeletePost();
+        },
+      },
+    ]);
+  }, [canDelete, executeDeletePost]);
 
   const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     setActiveIndex(Math.round(e.nativeEvent.contentOffset.x / IMAGE_WIDTH));
@@ -563,50 +708,47 @@ const PostItem = ({ item, theme, onSave }: any) => {
     }
   }, [item.id]);
 
-  const fetchReplies = useCallback(
-    async (parentId: string, page = 1) => {
-      try {
-        setReplyLoadingMap((prev) => ({ ...prev, [parentId]: true }));
-        const userString = await AsyncStorage.getItem("user");
-        if (!userString) return;
-        const user = JSON.parse(userString);
-        const res = await fetch(
-          `${CONFIG.API_ENDPOINT}/api/feed/post/comments-get?page=${page}`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${user.token}`,
-            },
-            body: JSON.stringify({ post_id: parentId }),
+  const fetchReplies = useCallback(async (parentId: string, page = 1) => {
+    try {
+      setReplyLoadingMap((prev) => ({ ...prev, [parentId]: true }));
+      const userString = await AsyncStorage.getItem("user");
+      if (!userString) return;
+      const user = JSON.parse(userString);
+      const res = await fetch(
+        `${CONFIG.API_ENDPOINT}/api/feed/post/comments-get?page=${page}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${user.token}`,
           },
-        );
-        const result = await res.json();
-        if (result.status) {
-          const newReplies = result.data?.data || [];
-          setReplyMap((prev) => ({
-            ...prev,
-            [parentId]:
-              page === 1
-                ? newReplies
-                : [...(prev[parentId] || []), ...newReplies],
-          }));
-          setReplyNextMap((prev) => ({
-            ...prev,
-            [parentId]: result.data?.next_page_url || null,
-          }));
-          setReplyPageMap((prev) => ({ ...prev, [parentId]: page }));
-        }
-      } catch (error) {
-      } finally {
-        setReplyLoadingMap((prev) => ({ ...prev, [parentId]: false }));
+          body: JSON.stringify({ post_id: parentId }),
+        },
+      );
+      const result = await res.json();
+      if (result.status) {
+        const newReplies = result.data?.data || [];
+        setReplyMap((prev) => ({
+          ...prev,
+          [parentId]:
+            page === 1
+              ? newReplies
+              : [...(prev[parentId] || []), ...newReplies],
+        }));
+        setReplyNextMap((prev) => ({
+          ...prev,
+          [parentId]: result.data?.next_page_url || null,
+        }));
+        setReplyPageMap((prev) => ({ ...prev, [parentId]: page }));
       }
-    },
-    [],
-  );
+    } catch (error) {
+    } finally {
+      setReplyLoadingMap((prev) => ({ ...prev, [parentId]: false }));
+    }
+  }, []);
 
   const updateCommentReaction = useCallback(
-    (list: any[], commentId: string, nextReaction: string) => {
+    (list: any[], commentId: string, nextReaction: string): any[] => {
       return list.map((c) => {
         if (String(c.id) === String(commentId)) {
           const prevReaction = c.my_reaction || "none";
@@ -652,7 +794,11 @@ const PostItem = ({ item, theme, onSave }: any) => {
         if (c.comments && Array.isArray(c.comments)) {
           return {
             ...c,
-            comments: updateCommentReaction(c.comments, commentId, nextReaction),
+            comments: updateCommentReaction(
+              c.comments,
+              commentId,
+              nextReaction,
+            ),
           };
         }
         return c;
@@ -784,7 +930,7 @@ const PostItem = ({ item, theme, onSave }: any) => {
   const renderMedia = () => {
     if (!mediaUrls || mediaUrls.length === 0) return null;
     return (
-      <View style={[styles.imageWrapper, { height: activeMediaHeight }]}>
+      <View style={[styles.imageWrapper, { height: fixedMediaHeight }]}>
         <FlatList
           data={mediaUrls}
           horizontal
@@ -793,16 +939,13 @@ const PostItem = ({ item, theme, onSave }: any) => {
           scrollEventThrottle={16}
           showsHorizontalScrollIndicator={false}
           keyExtractor={(_, idx) => `img-${item.id}-${idx}`}
-          renderItem={({ item: url, index }) => {
-            const imageHeight = IMAGE_WIDTH / getMediaAspectRatio(index);
-            return (
-              <Image
-                source={{ uri: url }}
-                style={[styles.postImage, { height: imageHeight }]}
-                resizeMode="cover"
-              />
-            );
-          }}
+          renderItem={({ item: url }) => (
+            <Image
+              source={{ uri: url }}
+              style={[styles.postImage, { height: fixedMediaHeight }]}
+              resizeMode="cover"
+            />
+          )}
         />
         {mediaUrls.length > 1 ? (
           <View style={styles.pagination}>
@@ -879,15 +1022,65 @@ const PostItem = ({ item, theme, onSave }: any) => {
             </View>
           </View>
         </TouchableOpacity>
-        <Text style={[styles.timeText, { color: theme.subText }]}>
-          {item.created_at_human_short}
-        </Text>
+        <View style={styles.headerRight}>
+          <View style={styles.headerMetaRow}>
+            {tradeTypeMeta ? (
+              <View
+                style={[
+                  styles.typeBadge,
+                  { backgroundColor: tradeTypeMeta.bg },
+                ]}
+              >
+                <Text
+                  style={[styles.typeBadgeText, { color: tradeTypeMeta.text }]}
+                >
+                  {tradeTypeMeta.label}
+                </Text>
+              </View>
+            ) : null}
+            <Text style={[styles.timeText, { color: theme.subText }]}>
+              {item.created_at_human_short}
+            </Text>
+          </View>
+          {canDelete ? (
+            <TouchableOpacity
+              style={styles.postMenuBtn}
+              onPress={() => setPostMenuVisible(true)}
+              disabled={deletingPost}
+            >
+              {deletingPost ? (
+                <ActivityIndicator size="small" color={theme.subText} />
+              ) : (
+                <Feather name="more-vertical" size={18} color={theme.subText} />
+              )}
+            </TouchableOpacity>
+          ) : null}
+        </View>
       </View>
 
       <View style={styles.titlePriceRow}>
-        <Text style={[styles.productTitle, { color: theme.text }]}>
-          {tradingData.product?.name || "Product"}
-        </Text>
+        <View style={styles.productNameRow}>
+          <Text style={[styles.productTitle, { color: theme.text }]}>
+            {tradingData.product?.name || "Product"}
+          </Text>
+          {conditionMeta ? (
+            <View
+              style={[
+                styles.conditionBadge,
+                { backgroundColor: conditionMeta.bg },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.conditionBadgeText,
+                  { color: conditionMeta.text },
+                ]}
+              >
+                {conditionMeta.label}
+              </Text>
+            </View>
+          ) : null}
+        </View>
         <Text style={styles.priceText}>
           {tradingData.currency?.toUpperCase() || "$"}{" "}
           {parseFloat(tradingData.price || "0").toLocaleString()}
@@ -952,7 +1145,11 @@ const PostItem = ({ item, theme, onSave }: any) => {
             style={styles.actionBtn}
             onPress={() => setShareVisible(true)}
           >
-            <Ionicons name="share-social-outline" size={20} color={theme.text} />
+            <Ionicons
+              name="share-social-outline"
+              size={20}
+              color={theme.text}
+            />
           </TouchableOpacity>
         </View>
         <TouchableOpacity
@@ -976,6 +1173,42 @@ const PostItem = ({ item, theme, onSave }: any) => {
       )}
 
       <Modal
+        visible={postMenuVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPostMenuVisible(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setPostMenuVisible(false)}>
+          <View style={styles.postMenuOverlay}>
+            <TouchableWithoutFeedback onPress={() => {}}>
+              <View
+                style={[
+                  styles.postMenuCard,
+                  {
+                    backgroundColor: theme.cardBg,
+                    borderColor: theme.border,
+                  },
+                ]}
+              >
+                <TouchableOpacity
+                  style={styles.postMenuItem}
+                  onPress={confirmDeletePost}
+                  disabled={deletingPost}
+                >
+                  {deletingPost ? (
+                    <ActivityIndicator size="small" color="#EF4444" />
+                  ) : (
+                    <Feather name="trash-2" size={18} color="#EF4444" />
+                  )}
+                  <Text style={styles.postMenuDeleteText}>Delete</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
+      <Modal
         visible={commentsVisible}
         transparent
         animationType="slide"
@@ -986,7 +1219,9 @@ const PostItem = ({ item, theme, onSave }: any) => {
         }}
       >
         <View style={styles.commentModalOverlay}>
-          <View style={[styles.commentModal, { backgroundColor: theme.cardBg }]}>
+          <View
+            style={[styles.commentModal, { backgroundColor: theme.cardBg }]}
+          >
             <View style={styles.commentHeader}>
               <Text style={[styles.commentTitle, { color: theme.text }]}>
                 Comments
@@ -1013,10 +1248,7 @@ const PostItem = ({ item, theme, onSave }: any) => {
                 </View>
               ) : comments.length === 0 ? (
                 <Text
-                  style={[
-                    styles.commentEmptyText,
-                    { color: theme.subText },
-                  ]}
+                  style={[styles.commentEmptyText, { color: theme.subText }]}
                 >
                   No comments yet.
                 </Text>
@@ -1101,7 +1333,9 @@ const PostItem = ({ item, theme, onSave }: any) => {
         onRequestClose={() => setShareVisible(false)}
       >
         <View style={styles.shareModalOverlay}>
-          <View style={[styles.shareModalCard, { backgroundColor: theme.cardBg }]}>
+          <View
+            style={[styles.shareModalCard, { backgroundColor: theme.cardBg }]}
+          >
             <View style={styles.shareHeader}>
               <Text style={[styles.shareTitle, { color: theme.text }]}>
                 Share
@@ -1183,6 +1417,8 @@ export default function ProfileScreen() {
   const [feed, setFeed] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isOwnProfile, setIsOwnProfile] = useState(false);
+  const [isFollowingProfile, setIsFollowingProfile] = useState(false);
+  const [followActionLoading, setFollowActionLoading] = useState(false);
 
   const theme = {
     bg: isDark ? "#0B0E14" : "#F8FAFC",
@@ -1203,7 +1439,10 @@ export default function ProfileScreen() {
   const profileName = userData?.name || userData?.username || "User";
   const avatarUri = formatMediaUrl(userData?.avatar || userData?.avatar_url);
   const coverUri = formatMediaUrl(
-    userData?.cover || userData?.cover_url || userData?.avatar || userData?.avatar_url,
+    userData?.cover ||
+      userData?.cover_url ||
+      userData?.avatar ||
+      userData?.avatar_url,
   );
   const fallbackAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(
     profileName,
@@ -1245,6 +1484,7 @@ export default function ProfileScreen() {
             loggedId &&
             String(normalizedUserId) === String(loggedId));
         setIsOwnProfile(Boolean(isOwn));
+        setIsFollowingProfile(resolveFollowState(profileJson.data));
 
         // 2. Fetch User's Feed Posts using the ID from profile response
         const feedRes = await fetch(
@@ -1279,12 +1519,121 @@ export default function ProfileScreen() {
     } catch (error) {}
   }, []);
 
+  const handleDeletePost = useCallback((deletedPostId: number | string) => {
+    setFeed((prev) =>
+      prev.filter(
+        (post) =>
+          String(post?.id ?? "") !== String(deletedPostId) &&
+          String(post?.main_post_id ?? "") !== String(deletedPostId),
+      ),
+    );
+
+    setUserData((prev: any) => {
+      if (!prev) return prev;
+      const currentCount = Number(prev?.posts_count);
+      const safeCount = Number.isFinite(currentCount) ? currentCount : 0;
+      return {
+        ...prev,
+        posts_count: Math.max(0, safeCount - 1),
+      };
+    });
+  }, []);
+
   const openContactsTab = useCallback(
     (targetTab: "Followers" | "Following" | "Suggestions") => {
-      router.push({ pathname: "/screens/Contacts", params: { tab: targetTab } });
+      router.push({
+        pathname: "/screens/Contacts",
+        params: { tab: targetTab },
+      });
     },
     [router],
   );
+
+  const handleAboutMePress = useCallback(() => {
+    const targetUserId = userData?.username || userData?.id;
+    if (!targetUserId) return;
+
+    router.push({
+      pathname: "/screens/AboutMe",
+      params: {
+        userId: String(targetUserId),
+        profileName: String(userData?.name || userData?.username || "User"),
+      },
+    });
+  }, [router, userData?.id, userData?.name, userData?.username]);
+
+  const handleFollowToggle = useCallback(async () => {
+    if (isOwnProfile || followActionLoading) return;
+
+    const targetUserId =
+      userData?.id || userData?.user_id || userData?.id_for_actions;
+    if (!targetUserId) return;
+
+    const endpoint = isFollowingProfile ? "unfollow" : "follow";
+    const nextFollowValue = !isFollowingProfile;
+
+    setFollowActionLoading(true);
+    try {
+      const userString = await AsyncStorage.getItem("user");
+      if (!userString) return;
+      const user = JSON.parse(userString);
+
+      const response = await fetch(
+        `${CONFIG.API_ENDPOINT}/api/connection/${endpoint}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${user?.token}`,
+          },
+          body: JSON.stringify({ user_id: Number(targetUserId) }),
+        },
+      );
+      const json = await response.json();
+
+      if (response.ok && json?.status) {
+        setIsFollowingProfile(nextFollowValue);
+        setUserData((prev: any) => {
+          if (!prev) return prev;
+          const currentFollowers = Number(prev?.followers_count);
+          const fallbackCount = Number.isFinite(currentFollowers)
+            ? currentFollowers
+            : 0;
+          const nextFollowers = Math.max(
+            0,
+            fallbackCount + (nextFollowValue ? 1 : -1),
+          );
+          return {
+            ...prev,
+            followers_count: json?.data?.followers_count ?? nextFollowers,
+            followedByMe: nextFollowValue,
+            is_following: nextFollowValue,
+            is_followed: nextFollowValue,
+          };
+        });
+      } else {
+        Alert.alert(
+          "Action failed",
+          json?.message ||
+            `Could not ${isFollowingProfile ? "unfollow" : "follow"} user.`,
+        );
+      }
+    } catch {
+      Alert.alert(
+        "Error",
+        `Could not ${isFollowingProfile ? "unfollow" : "follow"} user right now.`,
+      );
+    } finally {
+      setFollowActionLoading(false);
+    }
+  }, [
+    followActionLoading,
+    isFollowingProfile,
+    isOwnProfile,
+    userData?.id,
+    userData?.id_for_actions,
+    userData?.user_id,
+  ]);
 
   if (loading)
     return (
@@ -1334,21 +1683,68 @@ export default function ProfileScreen() {
           </View>
           <Text style={styles.handleText}>@{userData?.username}</Text>
 
-          {isOwnProfile ? (
-            <TouchableOpacity
-              onPress={() => router.push("/screens/EditProfile")}
-              style={styles.editBtnContainer}
-            >
-              <LinearGradient
-                colors={["#8B5CF6", "#6366F1"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.editBtn}
+          <View style={[styles.profileActionRow]}>
+            {isOwnProfile ? (
+              <TouchableOpacity
+                onPress={() => router.push("/screens/EditProfile")}
+                style={styles.editBtnContainer}
               >
-                <Text style={styles.editBtnText}>Edit Profile</Text>
-              </LinearGradient>
+                <LinearGradient
+                  colors={["#8B5CF6", "#6366F1"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.editBtn}
+                >
+                  <Text style={styles.editBtnText}>Edit Profile</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                onPress={handleFollowToggle}
+                disabled={followActionLoading}
+                style={[
+                  styles.followBtnContainer,
+                  {
+                    borderColor: theme.border,
+                    backgroundColor: isFollowingProfile
+                      ? theme.card
+                      : theme.primary,
+                  },
+                ]}
+              >
+                {followActionLoading ? (
+                  <ActivityIndicator
+                    size="small"
+                    color={isFollowingProfile ? theme.text : "#FFF"}
+                  />
+                ) : (
+                  <Text
+                    style={[
+                      styles.followBtnText,
+                      { color: isFollowingProfile ? theme.text : "#FFF" },
+                    ]}
+                  >
+                    {isFollowingProfile ? "Following" : "Follow"}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              onPress={handleAboutMePress}
+              style={[
+                styles.aboutBtnContainer,
+                {
+                  borderColor: theme.border,
+                  backgroundColor: theme.card,
+                },
+              ]}
+            >
+              <Feather name="info" size={16} color={theme.primary} />
+              <Text style={[styles.aboutBtnText, { color: theme.text }]}>
+                About
+              </Text>
             </TouchableOpacity>
-          ) : null}
+          </View>
         </View>
 
         <View style={styles.statsRow}>
@@ -1396,6 +1792,8 @@ export default function ProfileScreen() {
                 item={post}
                 theme={theme}
                 onSave={handleBookmark}
+                canDelete={isOwnProfile}
+                onDeletePost={handleDeletePost}
               />
             ))
           ) : (
@@ -1443,9 +1841,36 @@ const styles = StyleSheet.create({
   },
   profileName: { fontSize: 20, fontWeight: "bold" },
   handleText: { color: "#3B66F5", fontSize: 14, marginTop: 2 },
-  editBtnContainer: { marginTop: 15, width: "45%" },
+  profileActionRow: {
+    marginTop: 15,
+    width: "92%",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  editBtnContainer: { width: "48%" },
   editBtn: { paddingVertical: 10, borderRadius: 20, alignItems: "center" },
   editBtnText: { color: "#FFF", fontWeight: "bold" },
+  followBtnContainer: {
+    width: "48%",
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  followBtnText: { fontWeight: "700", fontSize: 14 },
+  aboutBtnContainer: {
+    width: "48%",
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 6,
+  },
+  aboutBtnText: { fontWeight: "700", fontSize: 14 },
   statsRow: {
     flexDirection: "row",
     justifyContent: "space-around",
@@ -1498,6 +1923,26 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   timeText: { fontSize: 11 },
+  headerRight: { alignItems: "flex-end", justifyContent: "center" },
+  headerMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  postMenuBtn: {
+    marginTop: 4,
+    paddingHorizontal: 2,
+    paddingVertical: 2,
+  },
+  typeBadge: {
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginRight: 8,
+  },
+  typeBadgeText: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
   countryFlag: { fontSize: 12, marginLeft: 4 },
   titlePriceRow: {
     flexDirection: "row",
@@ -1505,13 +1950,31 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 8,
   },
-  productTitle: { fontSize: 16, fontWeight: "bold" },
+  productNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    paddingRight: 8,
+  },
+  productTitle: { fontSize: 16, fontWeight: "bold", flexShrink: 1 },
+  conditionBadge: {
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginLeft: 8,
+  },
+  conditionBadgeText: { fontSize: 12, fontWeight: "700" },
   priceText: { fontSize: 18, fontWeight: "900", color: "#3B66F5" },
   specsRow: { flexDirection: "row", marginTop: 10 },
   specItem: { marginRight: 15 },
   specLabel: { color: "#94a3b8", fontSize: 12 },
   specValue: { color: "#3B66F5", fontWeight: "bold" },
-  imageWrapper: { marginTop: 15, borderRadius: 15, overflow: "hidden", width: "100%" },
+  imageWrapper: {
+    marginTop: 15,
+    borderRadius: 15,
+    overflow: "hidden",
+    width: "100%",
+  },
   postImage: { width: IMAGE_WIDTH },
   pagination: {
     position: "absolute",
@@ -1566,6 +2029,29 @@ const styles = StyleSheet.create({
   },
   pickerOption: { paddingHorizontal: 8 },
   pickerOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 998 },
+  postMenuOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.35)",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+  },
+  postMenuCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+  postMenuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+  },
+  postMenuDeleteText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#EF4444",
+  },
   commentModalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.4)",

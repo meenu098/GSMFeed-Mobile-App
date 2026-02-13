@@ -885,7 +885,7 @@ const TradingFeed = () => {
     <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
-      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+      <View style={[styles.header, { paddingTop: 4 }]}>
         <Text style={[styles.mainTitle, { color: theme.text }]}>
           Tradingfeed
         </Text>

@@ -59,6 +59,62 @@ const clampPostAspectRatio = (value: number) => {
   );
 };
 
+const getTradeTypeMeta = (value: unknown) => {
+  const normalized = String(value || "").trim().toLowerCase();
+
+  if (normalized === "wts" || normalized === "sell" || normalized === "offer") {
+    return {
+      label: "Sell",
+      bg: "#EEF2FF",
+      text: "#6366F1",
+    };
+  }
+
+  if (normalized === "wtb" || normalized === "buy" || normalized === "request") {
+    return {
+      label: "Buy",
+      bg: "#E8F5E9",
+      text: "#2E7D32",
+    };
+  }
+
+  return null;
+};
+
+const getConditionMeta = (value: unknown) => {
+  const raw =
+    typeof value === "string"
+      ? value
+      : value && typeof value === "object"
+        ? String((value as any)?.name ?? (value as any)?.label ?? "")
+        : "";
+  const normalized = raw.trim().toLowerCase();
+
+  if (!normalized) return null;
+
+  if (normalized === "used") {
+    return {
+      label: "Used",
+      bg: "#FDEBD7",
+      text: "#D97706",
+    };
+  }
+
+  if (normalized === "new") {
+    return {
+      label: "New",
+      bg: "#E8F5E9",
+      text: "#2E7D32",
+    };
+  }
+
+  return {
+    label: normalized.charAt(0).toUpperCase() + normalized.slice(1),
+    bg: "#EEF2FF",
+    text: "#6366F1",
+  };
+};
+
 const REACTION_TYPES = [
   { title: "like", Icon: LikeIcon, color: "#3B66F5" },
   { title: "love", Icon: LoveIcon, color: "#EF4444" },
@@ -468,7 +524,7 @@ const CommentItem = ({
   );
 };
 
-const PostItem = ({
+export const PostItem = ({
   item,
   theme,
   onSave,
@@ -527,11 +583,10 @@ const PostItem = ({
   const mediaUrls = tradingData.images || item.media || [];
   const postId = item.main_post_id ?? item.id;
   const pageLink = `${CONFIG.APP_URL}/feed/post/${postId}`;
-  const getMediaAspectRatio = useCallback(
-    (index: number) => mediaAspectRatios[index] || mediaAspectRatios[0] || 1,
-    [mediaAspectRatios],
-  );
-  const activeMediaHeight = IMAGE_WIDTH / getMediaAspectRatio(activeIndex);
+  const tradeTypeMeta = getTradeTypeMeta(tradingData?.type ?? item?.type);
+  const conditionMeta = getConditionMeta(tradingData?.condition ?? item?.condition);
+  const firstMediaAspectRatio = mediaAspectRatios[0] || 1;
+  const fixedMediaHeight = IMAGE_WIDTH / firstMediaAspectRatio;
 
   const handleProfilePress = () => {
     const username = author?.username || author?.user_name || author?.id;
@@ -559,25 +614,22 @@ const PostItem = ({
     setActiveIndex(0);
     setMediaAspectRatios({});
 
-    urls.forEach((url: string, index: number) => {
-      if (!url) return;
+    const firstUrl = urls[0];
+    if (firstUrl) {
       Image.getSize(
-        url,
+        firstUrl,
         (mediaWidth, mediaHeight) => {
           if (!active) return;
           const ratio =
             mediaWidth > 0 && mediaHeight > 0 ? mediaWidth / mediaHeight : 1;
-          setMediaAspectRatios((prev) => ({
-            ...prev,
-            [index]: clampPostAspectRatio(ratio),
-          }));
+          setMediaAspectRatios({ 0: clampPostAspectRatio(ratio) });
         },
         () => {
           if (!active) return;
-          setMediaAspectRatios((prev) => ({ ...prev, [index]: 1 }));
+          setMediaAspectRatios({ 0: 1 });
         },
       );
-    });
+    }
 
     return () => {
       active = false;
@@ -935,7 +987,7 @@ const PostItem = ({
   const renderMedia = () => {
     if (!mediaUrls || mediaUrls.length === 0) return null;
     return (
-      <View style={[styles.imageWrapper, { height: activeMediaHeight }]}>
+      <View style={[styles.imageWrapper, { height: fixedMediaHeight }]}>
         <FlatList
           data={mediaUrls}
           horizontal
@@ -944,16 +996,13 @@ const PostItem = ({
           scrollEventThrottle={16}
           showsHorizontalScrollIndicator={false}
           keyExtractor={(_, idx) => `img-${item.id}-${idx}`}
-          renderItem={({ item: url, index }) => {
-            const imageHeight = IMAGE_WIDTH / getMediaAspectRatio(index);
-            return (
-              <Image
-                source={{ uri: url }}
-                style={[styles.postImage, { height: imageHeight }]}
-                resizeMode="cover"
-              />
-            );
-          }}
+          renderItem={({ item: url }) => (
+            <Image
+              source={{ uri: url }}
+              style={[styles.postImage, { height: fixedMediaHeight }]}
+              resizeMode="cover"
+            />
+          )}
         />
         {mediaUrls.length > 1 ? (
           <View style={styles.pagination}>
@@ -1030,15 +1079,33 @@ const PostItem = ({
             </View>
           </View>
         </TouchableOpacity>
-        <Text style={[styles.timeText, { color: theme.subText }]}>
-          {item.created_at_human_short}
-        </Text>
+        <View style={styles.headerMetaRow}>
+          {tradeTypeMeta ? (
+            <View style={[styles.typeBadge, { backgroundColor: tradeTypeMeta.bg }]}>
+              <Text style={[styles.typeBadgeText, { color: tradeTypeMeta.text }]}>
+                {tradeTypeMeta.label}
+              </Text>
+            </View>
+          ) : null}
+          <Text style={[styles.timeText, { color: theme.subText }]}>
+            {item.created_at_human_short}
+          </Text>
+        </View>
       </View>
 
       <View style={styles.titlePriceRow}>
-        <Text style={[styles.productTitle, { color: theme.text }]}>
-          {tradingData.product?.name || "Product"}
-        </Text>
+        <View style={styles.productNameRow}>
+          <Text style={[styles.productTitle, { color: theme.text }]}>
+            {tradingData.product?.name || "Product"}
+          </Text>
+          {conditionMeta ? (
+            <View style={[styles.conditionBadge, { backgroundColor: conditionMeta.bg }]}>
+              <Text style={[styles.conditionBadgeText, { color: conditionMeta.text }]}>
+                {conditionMeta.label}
+              </Text>
+            </View>
+          ) : null}
+        </View>
         <Text style={styles.priceText}>
           {tradingData.currency?.toUpperCase() || "$"}{" "}
           {parseFloat(tradingData.price || "0").toLocaleString()}
@@ -1593,6 +1660,20 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   timeText: { fontSize: 11 },
+  headerMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  typeBadge: {
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginRight: 8,
+  },
+  typeBadgeText: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
   countryFlag: { fontSize: 12, marginLeft: 4 },
   titlePriceRow: {
     flexDirection: "row",
@@ -1600,7 +1681,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 8,
   },
-  productTitle: { fontSize: 16, fontWeight: "bold" },
+  productNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    paddingRight: 8,
+  },
+  productTitle: { fontSize: 16, fontWeight: "bold", flexShrink: 1 },
+  conditionBadge: {
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginLeft: 8,
+  },
+  conditionBadgeText: { fontSize: 12, fontWeight: "700" },
   priceText: { fontSize: 18, fontWeight: "900", color: "#3B66F5" },
   specsRow: { flexDirection: "row", marginTop: 10 },
   specItem: { marginRight: 15 },
@@ -1674,7 +1768,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
   },
   commentModal: {
-    height: "90%",
+    height: "60%",
     padding: 16,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
