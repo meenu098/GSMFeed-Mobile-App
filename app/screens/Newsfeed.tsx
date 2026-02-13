@@ -7,9 +7,9 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEventListener } from "expo";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useVideoPlayer, VideoSource, VideoView } from "expo-video";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Clipboard,
@@ -458,7 +458,7 @@ const CommentItem = ({
   );
 };
 
-const PostItem = ({ item, theme, onSave }: any) => {
+const PostItem = ({ item, theme, onSave, autoOpenPostId, onAutoOpenHandled }: any) => {
   const router = useRouter();
   const [activeIndex, setActiveIndex] = useState(0);
   const resolveIsSaved = useCallback((value: any) => {
@@ -840,6 +840,16 @@ const PostItem = ({ item, theme, onSave }: any) => {
   useEffect(() => {
     if (commentsVisible) fetchComments();
   }, [commentsVisible, fetchComments]);
+
+  const hasAutoOpenedRef = useRef(false);
+  useEffect(() => {
+    if (!autoOpenPostId || hasAutoOpenedRef.current) return;
+    if (String(autoOpenPostId) === String(postId)) {
+      setCommentsVisible(true);
+      hasAutoOpenedRef.current = true;
+      onAutoOpenHandled?.();
+    }
+  }, [autoOpenPostId, onAutoOpenHandled, postId]);
 
   // Helper: Specs Rendering (Fixes String Error)
   const renderSpecs = () => {
@@ -1275,8 +1285,12 @@ const PostItem = ({ item, theme, onSave }: any) => {
 export default function NewsFeedScreen() {
   const { isDark } = useTheme();
   const router = useRouter();
+  const { postId: routePostId, openComments } = useLocalSearchParams();
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [adIndex, setAdIndex] = useState(0);
+  const [targetPostId, setTargetPostId] = useState<string | null>(null);
+  const [shouldOpenComments, setShouldOpenComments] = useState(false);
+  const feedListRef = useRef<FlatList<any>>(null);
 
   const { feed, isLoading, fetchFeed } = useFeedData(
     `${CONFIG.API_ENDPOINT}/api/feed/posts`,
@@ -1285,6 +1299,17 @@ export default function NewsFeedScreen() {
   useEffect(() => {
     fetchFeed(1);
   }, [fetchFeed]);
+
+  useEffect(() => {
+    const id = Array.isArray(routePostId) ? routePostId[0] : routePostId;
+    if (id) {
+      setTargetPostId(String(id));
+    }
+    const openValue = Array.isArray(openComments)
+      ? openComments[0]
+      : openComments;
+    setShouldOpenComments(openValue === "1" || openValue === "true");
+  }, [openComments, routePostId]);
 
   const theme = {
     bg: isDark ? "#050609" : "#F8FAFC",
@@ -1325,6 +1350,23 @@ export default function NewsFeedScreen() {
     } catch (error) {}
   }, []);
 
+  useEffect(() => {
+    if (!targetPostId) return;
+    const index = feed.findIndex(
+      (item: any) => String(item.main_post_id ?? item.id) === targetPostId,
+    );
+    if (index >= 0) {
+      try {
+        feedListRef.current?.scrollToIndex({ index, animated: true });
+      } catch {}
+    }
+  }, [feed, targetPostId]);
+
+  const handleScrollToIndexFailed = useCallback((info: any) => {
+    const offset = info.averageItemLength * info.index;
+    feedListRef.current?.scrollToOffset({ offset, animated: true });
+  }, []);
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
@@ -1355,11 +1397,13 @@ export default function NewsFeedScreen() {
       </View>
 
       <FlatList
+        ref={feedListRef}
         data={feed}
         keyExtractor={(item) => item.id.toString()}
         onRefresh={() => fetchFeed(1)}
         refreshing={isLoading}
         showsVerticalScrollIndicator={false}
+        onScrollToIndexFailed={handleScrollToIndexFailed}
         ListHeaderComponent={
           <TouchableOpacity
             style={styles.broadcastBtnContainer}
@@ -1379,7 +1423,13 @@ export default function NewsFeedScreen() {
         }
         renderItem={({ item, index }) => (
           <View>
-            <PostItem item={item} theme={theme} onSave={handleBookmark} />
+            <PostItem
+              item={item}
+              theme={theme}
+              onSave={handleBookmark}
+              autoOpenPostId={shouldOpenComments ? targetPostId : null}
+              onAutoOpenHandled={() => setTargetPostId(null)}
+            />
             {index === 0 ? (
               <AdsCarousel
                 key={activeAd?.id ?? "ad"}

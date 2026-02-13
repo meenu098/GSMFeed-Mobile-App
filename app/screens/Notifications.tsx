@@ -165,6 +165,26 @@ export default function NotificationsScreen() {
     >
       <TouchableOpacity
         activeOpacity={0.8}
+        onPress={() => {
+          const actionId =
+            item?.actions?.view?.id ||
+            item?.extra_data?.post_id ||
+            item?.extra_data?.comment_id;
+          if (!actionId) return;
+          const commentTypes = new Set([
+            "comment-reply",
+            "comment-react",
+            "comment-mention",
+          ]);
+          const openComments = commentTypes.has(item?.type);
+          router.push({
+            pathname: "/screens/Newsfeed",
+            params: {
+              postId: String(actionId),
+              openComments: openComments ? "1" : "0",
+            },
+          });
+        }}
         style={[
           styles.notificationCard,
           {
