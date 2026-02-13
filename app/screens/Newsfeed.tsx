@@ -468,7 +468,7 @@ const CommentItem = ({
   );
 };
 
-const PostItem = ({
+export const PostItem = ({
   item,
   theme,
   onSave,

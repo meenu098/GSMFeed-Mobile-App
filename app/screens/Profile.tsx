@@ -10,6 +10,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Clipboard,
   Dimensions,
   FlatList,
@@ -59,6 +60,24 @@ const REACTION_TYPES = [
   { title: "sad", Icon: SadIcon, color: "#FBBF24" },
   { title: "angry", Icon: AngryIcon, color: "#EA580C" },
 ];
+
+const isTruthyFollow = (value: unknown) => {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    return normalized === "1" || normalized === "true" || normalized === "yes";
+  }
+  return false;
+};
+
+const resolveFollowState = (profile: any) => {
+  if (isTruthyFollow(profile?.followedByMe)) return true;
+  if (isTruthyFollow(profile?.is_following)) return true;
+  if (isTruthyFollow(profile?.is_followed)) return true;
+  if (isTruthyFollow(profile?.followed)) return true;
+  return false;
+};
 
 const stripHtml = (value: string) => {
   if (!value) return "";
@@ -1183,6 +1202,8 @@ export default function ProfileScreen() {
   const [feed, setFeed] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isOwnProfile, setIsOwnProfile] = useState(false);
+  const [isFollowingProfile, setIsFollowingProfile] = useState(false);
+  const [followActionLoading, setFollowActionLoading] = useState(false);
 
   const theme = {
     bg: isDark ? "#0B0E14" : "#F8FAFC",
@@ -1245,6 +1266,7 @@ export default function ProfileScreen() {
             loggedId &&
             String(normalizedUserId) === String(loggedId));
         setIsOwnProfile(Boolean(isOwn));
+        setIsFollowingProfile(resolveFollowState(profileJson.data));
 
         // 2. Fetch User's Feed Posts using the ID from profile response
         const feedRes = await fetch(
@@ -1299,6 +1321,71 @@ export default function ProfileScreen() {
     });
   }, [router, userData?.id, userData?.name, userData?.username]);
 
+  const handleFollowToggle = useCallback(async () => {
+    if (isOwnProfile || followActionLoading) return;
+
+    const targetUserId = userData?.id || userData?.user_id || userData?.id_for_actions;
+    if (!targetUserId) return;
+
+    const endpoint = isFollowingProfile ? "unfollow" : "follow";
+    const nextFollowValue = !isFollowingProfile;
+
+    setFollowActionLoading(true);
+    try {
+      const userString = await AsyncStorage.getItem("user");
+      if (!userString) return;
+      const user = JSON.parse(userString);
+
+      const response = await fetch(
+        `${CONFIG.API_ENDPOINT}/api/connection/${endpoint}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${user?.token}`,
+          },
+          body: JSON.stringify({ user_id: Number(targetUserId) }),
+        },
+      );
+      const json = await response.json();
+
+      if (response.ok && json?.status) {
+        setIsFollowingProfile(nextFollowValue);
+        setUserData((prev: any) => {
+          if (!prev) return prev;
+          const currentFollowers = Number(prev?.followers_count);
+          const fallbackCount = Number.isFinite(currentFollowers)
+            ? currentFollowers
+            : 0;
+          const nextFollowers = Math.max(
+            0,
+            fallbackCount + (nextFollowValue ? 1 : -1),
+          );
+          return {
+            ...prev,
+            followers_count: json?.data?.followers_count ?? nextFollowers,
+            followedByMe: nextFollowValue,
+            is_following: nextFollowValue,
+            is_followed: nextFollowValue,
+          };
+        });
+      } else {
+        Alert.alert(
+          "Action failed",
+          json?.message ||
+            `Could not ${isFollowingProfile ? "unfollow" : "follow"} user.`,
+        );
+      }
+    } catch {
+      Alert.alert(
+        "Error",
+        `Could not ${isFollowingProfile ? "unfollow" : "follow"} user right now.`,
+      );
+    } finally {
+      setFollowActionLoading(false);
+    }
+  }, [followActionLoading, isFollowingProfile, isOwnProfile, userData?.id, userData?.id_for_actions, userData?.user_id]);
+
   if (loading)
     return (
       <View style={styles.centered}>
@@ -1350,7 +1437,6 @@ export default function ProfileScreen() {
           <View
             style={[
               styles.profileActionRow,
-              !isOwnProfile && styles.profileActionRowSingle,
             ]}
           >
             {isOwnProfile ? (
@@ -1367,24 +1453,51 @@ export default function ProfileScreen() {
                   <Text style={styles.editBtnText}>Edit Profile</Text>
                 </LinearGradient>
               </TouchableOpacity>
-            ) : null}
+            ) : (
+              <TouchableOpacity
+                onPress={handleFollowToggle}
+                disabled={followActionLoading}
+                style={[
+                  styles.followBtnContainer,
+                  {
+                    borderColor: theme.border,
+                    backgroundColor: isFollowingProfile ? theme.card : theme.primary,
+                  },
+                ]}
+              >
+                {followActionLoading ? (
+                  <ActivityIndicator
+                    size="small"
+                    color={isFollowingProfile ? theme.text : "#FFF"}
+                  />
+                ) : (
+                  <Text
+                    style={[
+                      styles.followBtnText,
+                      { color: isFollowingProfile ? theme.text : "#FFF" },
+                    ]}
+                  >
+                    {isFollowingProfile ? "Following" : "Follow"}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               onPress={handleAboutMePress}
               style={[
                 styles.aboutBtnContainer,
-                !isOwnProfile && styles.aboutBtnContainerSingle,
                 {
                   borderColor: theme.border,
                   backgroundColor: theme.card,
                 },
               ]}
-            >
-              <Feather name="info" size={16} color={theme.primary} />
-              <Text style={[styles.aboutBtnText, { color: theme.text }]}>
-                About Me
-              </Text>
-            </TouchableOpacity>
-          </View>
+              >
+                <Feather name="info" size={16} color={theme.primary} />
+                <Text style={[styles.aboutBtnText, { color: theme.text }]}>
+                  About
+                </Text>
+              </TouchableOpacity>
+            </View>
         </View>
 
         <View style={styles.statsRow}>
@@ -1486,12 +1599,18 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
-  profileActionRowSingle: {
-    justifyContent: "center",
-  },
   editBtnContainer: { width: "48%" },
   editBtn: { paddingVertical: 10, borderRadius: 20, alignItems: "center" },
   editBtnText: { color: "#FFF", fontWeight: "bold" },
+  followBtnContainer: {
+    width: "48%",
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  followBtnText: { fontWeight: "700", fontSize: 14 },
   aboutBtnContainer: {
     width: "48%",
     paddingVertical: 10,
@@ -1501,9 +1620,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     flexDirection: "row",
     gap: 6,
-  },
-  aboutBtnContainerSingle: {
-    width: "58%",
   },
   aboutBtnText: { fontWeight: "700", fontSize: 14 },
   statsRow: {
