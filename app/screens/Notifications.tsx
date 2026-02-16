@@ -282,7 +282,7 @@ export default function NotificationsScreen() {
             ) : null
           }
           ListEmptyComponent={
-            !loading && (
+            !loading ? (
               <View style={styles.emptyContainer}>
                 <MaterialCommunityIcons
                   name="bell-off-outline"
@@ -293,7 +293,7 @@ export default function NotificationsScreen() {
                   No notifications yet
                 </Text>
               </View>
-            )
+            ) : null
           }
         />
         <BottomNav />
