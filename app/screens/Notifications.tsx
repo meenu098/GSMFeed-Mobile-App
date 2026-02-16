@@ -6,7 +6,6 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
-  Dimensions,
   FlatList,
   Image,
   StyleSheet,
@@ -22,20 +21,36 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import BottomNav from "../../components/BottomNav";
 import SkeletonLoader from "../../components/SkeletonLoader";
 import CONFIG from "../../shared/config";
+import { useNotificationCenter } from "../../shared/notifications/NotificationCenterContext";
 import { useTheme } from "../../shared/themeContext";
-
-const { width } = Dimensions.get("window");
 
 export default function NotificationsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { isDark, screenTheme } = useTheme();
+  const { refreshUnreadCount, setUnreadCount } = useNotificationCenter();
 
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [hasMoreData, setHasMoreData] = useState(true);
   const [userToken, setUserToken] = useState<string | null>(null);
+
+  const isUnread = (value: unknown) => {
+    if (typeof value === "boolean") return !value;
+    if (typeof value === "number") return value === 0;
+    if (typeof value === "string") {
+      const normalized = value.trim().toLowerCase();
+      return normalized === "0" || normalized === "false" || normalized === "no";
+    }
+    return true;
+  };
+
+  const countUnread = (items: any[]) =>
+    items.reduce(
+      (count, item) => count + (isUnread(item?.is_read) ? 1 : 0),
+      0,
+    );
 
   const theme = {
     background: screenTheme.bg,
@@ -50,17 +65,18 @@ export default function NotificationsScreen() {
   };
 
   useEffect(() => {
-    initUser();
-  }, []);
+    const initUser = async () => {
+      const userString = await AsyncStorage.getItem("user");
+      if (userString) {
+        const user = JSON.parse(userString);
+        setUserToken(user.token);
+        fetchNotifications(user.token, true);
+        refreshUnreadCount();
+      }
+    };
 
-  const initUser = async () => {
-    const userString = await AsyncStorage.getItem("user");
-    if (userString) {
-      const user = JSON.parse(userString);
-      setUserToken(user.token);
-      fetchNotifications(user.token, true);
-    }
-  };
+    initUser();
+  }, [refreshUnreadCount]);
 
   const fetchNotifications = async (token: string, initial = false) => {
     if (loading || (!hasMoreData && !initial)) return;
@@ -77,14 +93,18 @@ export default function NotificationsScreen() {
       if (response.ok) {
         const json = await response.json();
         if (json?.status) {
-          const newNotifs = json.data || [];
-          setNotifications((prev) =>
-            initial ? newNotifs : [...prev, ...newNotifs],
-          );
+          const newNotifs = Array.isArray(json.data) ? json.data : [];
+          let unread = 0;
+          setNotifications((prev) => {
+            const next = initial ? newNotifs : [...prev, ...newNotifs];
+            unread = countUnread(next);
+            return next;
+          });
+          setUnreadCount(unread);
           setHasMoreData(newNotifs.length >= 10);
         }
       }
-    } catch (error) {
+    } catch {
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -92,7 +112,11 @@ export default function NotificationsScreen() {
   };
 
   const deleteNotification = async (id: string) => {
-    setNotifications((prev) => prev.filter((n) => n.id !== id));
+    setNotifications((prev) => {
+      const next = prev.filter((n) => n.id !== id);
+      setUnreadCount(countUnread(next));
+      return next;
+    });
     try {
       await fetch(
         `${CONFIG.API_ENDPOINT}/api/user/notifications/delete/${id}`,
@@ -101,12 +125,15 @@ export default function NotificationsScreen() {
           headers: { Authorization: `Bearer ${userToken}` },
         },
       );
-    } catch (e) {
+    } catch {
+    } finally {
+      refreshUnreadCount();
     }
   };
 
   const markAllAsRead = async () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, is_read: 1 })));
+    setUnreadCount(0);
     try {
       await fetch(
         `${CONFIG.API_ENDPOINT}/api/user/notifications/mark-as-read`,
@@ -115,7 +142,9 @@ export default function NotificationsScreen() {
           headers: { Authorization: `Bearer ${userToken}` },
         },
       );
-    } catch (e) {
+    } catch {
+    } finally {
+      refreshUnreadCount();
     }
   };
 
@@ -127,19 +156,29 @@ export default function NotificationsScreen() {
         style: "destructive",
         onPress: async () => {
           setNotifications([]);
+          setUnreadCount(0);
           try {
             await fetch(
               `${CONFIG.API_ENDPOINT}/api/user/notifications/delete`,
               {
                 method: "GET",
                 headers: { Authorization: `Bearer ${userToken}` },
-              },
-            );
-          } catch (e) {
-          }
+                },
+              );
+            } catch {
+            } finally {
+              refreshUnreadCount();
+            }
+          },
         },
-      },
-    ]);
+      ]);
+  };
+
+  const handleRefresh = () => {
+    if (!userToken) return;
+    setRefreshing(true);
+    setHasMoreData(true);
+    fetchNotifications(userToken, true);
   };
 
   const renderRightActions = (id: string, progress: any) => {
@@ -276,7 +315,7 @@ export default function NotificationsScreen() {
             renderItem={renderItem}
             keyExtractor={(item) => item.id.toString()}
             contentContainerStyle={styles.listContent}
-            onRefresh={() => fetchNotifications(userToken!, true)}
+            onRefresh={handleRefresh}
             refreshing={refreshing}
             onEndReached={() => userToken && fetchNotifications(userToken)}
             onEndReachedThreshold={0.5}
@@ -286,7 +325,7 @@ export default function NotificationsScreen() {
               ) : null
             }
             ListEmptyComponent={
-              !loading && (
+              !loading ? (
                 <View style={styles.emptyContainer}>
                   <MaterialCommunityIcons
                     name="bell-off-outline"
@@ -297,7 +336,7 @@ export default function NotificationsScreen() {
                     No notifications yet
                   </Text>
                 </View>
-              )
+              ) : null
             }
           />
         )}

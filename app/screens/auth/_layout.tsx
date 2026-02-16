@@ -2,7 +2,10 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Stack, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import SkeletonLoader from "../../../components/SkeletonLoader";
-import { parseStoredUser, resolveAuthenticatedRoute } from "../../../shared/authGate";
+import {
+  parseStoredUser,
+  resolveAuthenticatedRoute,
+} from "../../../shared/authGate";
 
 export default function AuthLayout() {
   const router = useRouter();

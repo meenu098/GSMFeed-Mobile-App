@@ -19,6 +19,7 @@ const OnboardingController = () => {
   const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [profileUploadLoading, setProfileUploadLoading] = useState(false);
+  const [notificationSaving, setNotificationSaving] = useState(false);
 
   useEffect(() => {
     const initUser = async () => {
@@ -135,6 +136,34 @@ const OnboardingController = () => {
       Alert.alert("Error", "Network error. Please try again.");
     } finally {
       setProfileUploadLoading(false);
+    }
+  };
+
+  const handleNotificationNext = async (enabled: boolean) => {
+    if (notificationSaving) return;
+
+    if (!userData?.token) {
+      handleNext();
+      return;
+    }
+
+    setNotificationSaving(true);
+    try {
+      await fetch(`${CONFIG.API_ENDPOINT}/api/notifications/settings/pause`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${userData.token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          limit: enabled ? null : "unli",
+        }),
+      });
+    } catch {
+      // Continue onboarding even if this preference sync fails.
+    } finally {
+      setNotificationSaving(false);
+      handleNext();
     }
   };
 
@@ -255,7 +284,7 @@ const OnboardingController = () => {
         />
       )}
       {step === 3 && (
-        <NotificationStep onNext={() => handleNext()} onBack={handleBack} />
+        <NotificationStep onNext={handleNotificationNext} onBack={handleBack} />
       )}
       {step === 4 && (
         <ProfilePictureStep

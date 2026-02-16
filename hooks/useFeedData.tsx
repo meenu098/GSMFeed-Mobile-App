@@ -1,24 +1,37 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+
+const REQUEST_TIMEOUT_MS = 12000;
 
 export const useFeedData = (rootUrl: string) => {
   const [feed, setFeed] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [page, setPage] = useState(1);
+  const [error, setError] = useState<string | null>(null);
+  const isLoadingRef = useRef(false);
+
+  useEffect(() => {
+    isLoadingRef.current = isLoading;
+  }, [isLoading]);
 
   const fetchFeed = useCallback(
     async (pageNum = 1) => {
-      if (isLoading) return;
+      if (isLoadingRef.current) return;
       setIsLoading(true);
+      setError(null);
 
       try {
         const userString = await AsyncStorage.getItem("user");
         if (!userString) {
+          setError("Session not found. Please login again.");
           setIsLoading(false);
           return;
         }
         const userObj = JSON.parse(userString);
         const token = userObj.token;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => {
+          controller.abort();
+        }, REQUEST_TIMEOUT_MS);
 
         const response = await fetch(`${rootUrl}?page=${pageNum}`, {
           method: "GET",
@@ -26,7 +39,9 @@ export const useFeedData = (rootUrl: string) => {
             Accept: "application/json",
             Authorization: `Bearer ${token}`,
           },
+          signal: controller.signal,
         });
+        clearTimeout(timeoutId);
 
         const res = await response.json();
 
@@ -34,9 +49,16 @@ export const useFeedData = (rootUrl: string) => {
           setFeed((prev) =>
             pageNum === 1 ? res.data.data : [...prev, ...res.data.data],
           );
-          setPage(pageNum);
+          setError(null);
+        } else {
+          setError(res?.message || "Unable to load feed.");
         }
-      } catch (error) {
+      } catch (error: any) {
+        if (error?.name === "AbortError") {
+          setError("Request timed out. Check backend connection and try again.");
+        } else {
+          setError("Unable to connect to server. Please try again.");
+        }
       } finally {
         setIsLoading(false);
       }
@@ -44,5 +66,5 @@ export const useFeedData = (rootUrl: string) => {
     [rootUrl],
   );
 
-  return { feed, isLoading, fetchFeed };
+  return { feed, isLoading, error, fetchFeed };
 };

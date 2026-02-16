@@ -20,6 +20,7 @@ import {
   Settings,
 } from "../../components/icons/sidebarIcon";
 import CONFIG from "../../shared/config";
+import { useNotificationCenter } from "../../shared/notifications/NotificationCenterContext";
 import { clearUser } from "../../shared/storage";
 import { useTheme } from "../../shared/themeContext";
 
@@ -27,6 +28,7 @@ export default function Sidebar() {
   const router = useRouter();
   const { top, bottom } = useSafeAreaInsets();
   const { isDark, toggleTheme, screenTheme } = useTheme();
+  const { unreadCount } = useNotificationCenter();
 
   const [userData, setUserData] = useState<any>(null);
   const [imgLoading, setImgLoading] = useState(false);
@@ -85,7 +87,7 @@ export default function Sidebar() {
           // Update storage so all components benefit from fresh data
           await AsyncStorage.setItem("user", JSON.stringify(updatedData));
         }
-      } catch (error) {
+      } catch {
       }
     };
 
@@ -194,6 +196,13 @@ export default function Sidebar() {
                     {item.label}
                   </Text>
                 </View>
+                {item.screen === "/screens/Notifications" && unreadCount > 0 && (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </Text>
+                  </View>
+                )}
               </TouchableOpacity>
             ))}
           </View>
@@ -283,6 +292,20 @@ const styles = StyleSheet.create({
   },
   menuLeft: { flexDirection: "row", alignItems: "center" },
   menuText: { fontSize: 16, marginLeft: 15, fontWeight: "400" },
+  badge: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    paddingHorizontal: 6,
+    backgroundColor: "#EF4444",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  badgeText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "700",
+  },
   footer: {
     flexDirection: "row",
     justifyContent: "space-between",

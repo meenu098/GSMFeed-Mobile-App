@@ -39,6 +39,7 @@ import WowIcon from "../../assets/reaction/wow.svg";
 import BottomNav from "../../components/BottomNav";
 import SkeletonLoader from "../../components/SkeletonLoader";
 import CONFIG from "../../shared/config";
+import { extractPostSpecs } from "../../shared/postSpecs";
 import { useTheme } from "../../shared/themeContext";
 
 const { width } = Dimensions.get("window");
@@ -480,6 +481,7 @@ const PostItem = ({ item, theme, onSave, canDelete, onDeletePost }: any) => {
   const tradingData = item.trading_feeds?.[0] || {};
   const author = item.author || {};
   const mediaUrls = tradingData.images || item.media || [];
+  const specs = extractPostSpecs(item, tradingData);
   const postId = item.main_post_id ?? item.id;
   const deletePostId = item.id ?? item.main_post_id ?? postId;
   const pageLink = `${CONFIG.APP_URL}/feed/post/${postId}`;
@@ -903,26 +905,24 @@ const PostItem = ({ item, theme, onSave, canDelete, onDeletePost }: any) => {
 
   // Helper: Specs Rendering (Fixes String Error)
   const renderSpecs = () => {
-    if (
-      !tradingData ||
-      (!tradingData.storage && !tradingData.grade && !tradingData.qty)
-    )
-      return null;
+    const items = [
+      { key: "qty", label: "Qty", value: specs.qty },
+      { key: "spec", label: "Spec", value: specs.spec },
+      { key: "grade", label: "Grade", value: specs.grade },
+      { key: "storage", label: "Storage", value: specs.storage },
+    ].filter((entry) => entry.value !== null);
+
+    if (!items.length) return null;
+
     return (
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         style={styles.specsRow}
       >
-        {tradingData.storage?.name ? (
-          <SpecItem label="Storage" value={tradingData.storage.name} />
-        ) : null}
-        {tradingData.grade?.name ? (
-          <SpecItem label="Grade" value={tradingData.grade.name} />
-        ) : null}
-        {tradingData.qty ? (
-          <SpecItem label="Qty" value={tradingData.qty} />
-        ) : null}
+        {items.map((entry) => (
+          <SpecItem key={entry.key} label={entry.label} value={entry.value} />
+        ))}
       </ScrollView>
     );
   };

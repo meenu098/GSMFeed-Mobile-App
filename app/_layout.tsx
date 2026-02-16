@@ -4,6 +4,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { RegistrationProvider } from "../shared/RegistrationContext";
 import { ThemeProvider, useTheme } from "../shared/themeContext";
 import { applyGlobalTypography } from "../shared/globalTypography";
+import { NotificationCenterProvider } from "../shared/notifications/NotificationCenterContext";
 
 applyGlobalTypography();
 
@@ -35,9 +36,11 @@ function RootLayoutNav() {
 export default function RootLayout() {
   return (
     <ThemeProvider>
-      <RegistrationProvider>
-        <RootLayoutNav />
-      </RegistrationProvider>
+      <NotificationCenterProvider>
+        <RegistrationProvider>
+          <RootLayoutNav />
+        </RegistrationProvider>
+      </NotificationCenterProvider>
     </ThemeProvider>
   );
 }

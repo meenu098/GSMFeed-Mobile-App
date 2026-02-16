@@ -1,8 +1,6 @@
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
-import * as Notifications from "expo-notifications";
 import React, { useState } from "react";
 import {
-  Platform,
   StyleSheet,
   Switch,
   Text,
@@ -29,18 +27,7 @@ const NotificationStep = ({ onNext, onBack }: NotificationStepProps) => {
     primary: "#8B5CF6",
   };
 
-  const toggleSwitch = async () => {
-    if (!isEnabled) {
-      const { status } = await Notifications.requestPermissionsAsync();
-      if (status === "granted") {
-        setIsEnabled(true);
-      } else {
-        alert("Permission denied. Please enable notifications in settings.");
-      }
-    } else {
-      setIsEnabled(false);
-    }
-  };
+  const toggleSwitch = () => setIsEnabled((prev) => !prev);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
@@ -59,7 +46,7 @@ const NotificationStep = ({ onNext, onBack }: NotificationStepProps) => {
             Turn on notifications
           </Text>
           <Text style={[styles.subtitle, { color: colors.subText }]}>
-            Stay up to date from traders
+            Stay updated with in-app alerts in your notification center.
           </Text>
 
           {/* Toggle Switch */}
@@ -70,13 +57,12 @@ const NotificationStep = ({ onNext, onBack }: NotificationStepProps) => {
               ios_backgroundColor="#E2E8F0"
               onValueChange={toggleSwitch}
               value={isEnabled}
-              style={
-                Platform.OS === "ios"
-                  ? { transform: [{ scaleX: 1.5 }, { scaleY: 1.5 }] }
-                  : { scaleX: 1.5, scaleY: 1.5 }
-              }
+              style={{ transform: [{ scaleX: 1.5 }, { scaleY: 1.5 }] }}
             />
           </View>
+          <Text style={[styles.statusText, { color: colors.subText }]}>
+            {isEnabled ? "In-app notifications enabled" : "In-app notifications paused"}
+          </Text>
         </View>
 
         {/* Navigation Footer */}
@@ -137,6 +123,10 @@ const styles = StyleSheet.create({
   },
   switchContainer: {
     marginVertical: 20,
+  },
+  statusText: {
+    fontSize: 13,
+    textAlign: "center",
   },
   footer: {
     flexDirection: "row",
