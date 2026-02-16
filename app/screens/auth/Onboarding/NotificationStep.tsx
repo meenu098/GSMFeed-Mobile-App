@@ -1,6 +1,9 @@
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import Constants, { ExecutionEnvironment } from "expo-constants";
 import React, { useState } from "react";
 import {
+  Alert,
+  Platform,
   StyleSheet,
   Switch,
   Text,
@@ -18,6 +21,10 @@ interface NotificationStepProps {
 const NotificationStep = ({ onNext, onBack }: NotificationStepProps) => {
   const { isDark, screenTheme } = useTheme();
   const [isEnabled, setIsEnabled] = useState(false);
+  const isExpoGoAndroid =
+    Platform.OS === "android" &&
+    Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+  const isWeb = Platform.OS === "web";
 
   const colors = {
     bg: isDark ? "#0F172A" : "#F8F3FF",
@@ -27,7 +34,46 @@ const NotificationStep = ({ onNext, onBack }: NotificationStepProps) => {
     primary: "#8B5CF6",
   };
 
-  const toggleSwitch = () => setIsEnabled((prev) => !prev);
+  const toggleSwitch = async () => {
+    if (isEnabled) {
+      setIsEnabled(false);
+      return;
+    }
+
+    if (isWeb) {
+      Alert.alert(
+        "Notifications unavailable",
+        "Push notifications are not supported on web in this app.",
+      );
+      return;
+    }
+
+    if (isExpoGoAndroid) {
+      Alert.alert(
+        "Expo Go limitation",
+        "Android push notifications are not supported in Expo Go. Use a development build to enable this.",
+      );
+      return;
+    }
+
+    try {
+      const Notifications = await import("expo-notifications");
+      const { status } = await Notifications.requestPermissionsAsync();
+      if (status === "granted") {
+        setIsEnabled(true);
+      } else {
+        Alert.alert(
+          "Permission denied",
+          "Please enable notifications in your device settings.",
+        );
+      }
+    } catch (_error) {
+      Alert.alert(
+        "Notifications unavailable",
+        "This build cannot request notification permissions.",
+      );
+    }
+  };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
@@ -61,7 +107,9 @@ const NotificationStep = ({ onNext, onBack }: NotificationStepProps) => {
             />
           </View>
           <Text style={[styles.statusText, { color: colors.subText }]}>
-            {isEnabled ? "In-app notifications enabled" : "In-app notifications paused"}
+            {isEnabled
+              ? "In-app notifications enabled"
+              : "In-app notifications paused"}
           </Text>
         </View>
 

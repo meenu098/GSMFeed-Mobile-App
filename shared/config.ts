@@ -1,28 +1,20 @@
+const apiEndpoint =
+  process.env.EXPO_PUBLIC_API_ENDPOINT ?? "https://api.gsmfeed.com";
+const appUrl = process.env.EXPO_PUBLIC_APP_URL ?? "https://app.gsmfeed.com";
+const landingUrl =
+  process.env.EXPO_PUBLIC_LANDING_URL ?? "https://gsmfeed.com";
+const currentDomain =
+  process.env.EXPO_PUBLIC_CURRENT_DOMAIN ?? "gsmfeed.com";
+const returnUrl =
+  process.env.EXPO_PUBLIC_RETURN_URL ??
+  `${appUrl.replace(/\/+$/, "")}/membership`;
+
 const CONFIG = {
-  API_ENDPOINT: "http://localhost:8000",
-  APP_URL: "http://localhost:3000",
-  LANDING_URL: "https://gsmfeed.com",
-  CURRENT_DOMAIN: "gsmfeed.com",
-  RETURN_URL: "https://localhost:8000/membership",
+  API_ENDPOINT: apiEndpoint,
+  APP_URL: appUrl,
+  LANDING_URL: landingUrl,
+  CURRENT_DOMAIN: currentDomain,
+  RETURN_URL: returnUrl,
 };
-// const CONFIG = {
-//   API_ENDPOINT: "https://api.gsmfeed.com",
-//   APP_URL: "https://app.gsmfeed.com",
-//   LANDING_URL: "https://gsmfeed.com",
-//   CURRENT_DOMAIN: "gsmfeed.com",
-//   RETURN_URL: "https://app.gsmfeed.com/membership",
-// };
-//   API_ENDPOINT: "http://192.168.1.178:8000",
-//   APP_URL: "http://192.168.1.178:3000",
-//   LANDING_URL: "https://gsmfeed.com",
-//   CURRENT_DOMAIN: "gsmfeed.com",
-//   RETURN_URL: "http://192.168.1.178:8000/membership",
-// };
-//   API_ENDPOINT: "http://10.255.254.99:8000",
-//   APP_URL: "http://10.255.254.99:3000",
-//   LANDING_URL: "https://gsmfeed.com",
-//   CURRENT_DOMAIN: "gsmfeed.com",
-//   RETURN_URL: "http://10.255.254.99:8000/membership",
-// };
 
 export default CONFIG;
