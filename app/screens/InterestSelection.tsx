@@ -19,9 +19,22 @@ import { useTheme } from "../../shared/themeContext";
 
 const { width } = Dimensions.get("window");
 
-export default function InterestSelectionScreen() {
+interface InterestSelectionScreenProps {
+  mode?: "settings" | "onboarding";
+  user?: any;
+  onSubmitSuccess?: () => void | Promise<void>;
+  onBack?: () => void;
+}
+
+export default function InterestSelectionScreen({
+  mode = "settings",
+  user,
+  onSubmitSuccess,
+  onBack,
+}: InterestSelectionScreenProps = {}) {
   const { isDark, screenTheme } = useTheme();
   const router = useRouter();
+  const isOnboardingFlow = mode === "onboarding";
 
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -53,6 +66,21 @@ export default function InterestSelectionScreen() {
     initializeData();
   }, []);
 
+  const getSessionUser = async () => {
+    if (user?.token) {
+      return user;
+    }
+
+    const userString = await AsyncStorage.getItem("user");
+    if (!userString) return null;
+
+    try {
+      return JSON.parse(userString);
+    } catch {
+      return null;
+    }
+  };
+
   // Fetch all available interests from the general list
   const fetchInterests = async () => {
     try {
@@ -68,9 +96,8 @@ export default function InterestSelectionScreen() {
   // Fetch the user's current settings to pre-populate the UI
   const fetchUserInterests = async () => {
     try {
-      const userString = await AsyncStorage.getItem("user");
-      if (!userString) return;
-      const user = JSON.parse(userString);
+      const sessionUser = await getSessionUser();
+      if (!sessionUser?.token) return;
 
       const response = await fetch(
         `${CONFIG.API_ENDPOINT}/api/interests/user/settings`,
@@ -78,19 +105,26 @@ export default function InterestSelectionScreen() {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${user?.token}`,
+            Authorization: `Bearer ${sessionUser.token}`,
           },
         },
       );
 
       const res = await response.json();
+      const normalized = Array.isArray(res)
+        ? res
+        : Array.isArray(res?.data)
+          ? res.data
+          : [];
 
       // Filter main interests (parent_id is null)
-      const selectedMain = res.filter((item: any) => item.parent_id == null);
+      const selectedMain = normalized.filter(
+        (item: any) => item.parent_id == null,
+      );
       setSelectedMainIds(selectedMain.map((item: any) => item.id));
 
       // Filter brands (parent_id is NOT null)
-      const brands = res.filter((item: any) => item.parent_id != null);
+      const brands = normalized.filter((item: any) => item.parent_id != null);
       setSelectedBrands(brands); // This ensures they show as selected in Step 2
     } catch (error) {
     }
@@ -120,9 +154,11 @@ export default function InterestSelectionScreen() {
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
-      const userString = await AsyncStorage.getItem("user");
-      if (!userString) return;
-      const user = JSON.parse(userString);
+      const sessionUser = await getSessionUser();
+      if (!sessionUser?.token) {
+        Alert.alert("Error", "User session not found.");
+        return;
+      }
 
       const mainInterestsObjects = interestsData
         .filter((item) => selectedMainIds.includes(item.id))
@@ -144,26 +180,43 @@ export default function InterestSelectionScreen() {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${user.token}`,
+            Authorization: `Bearer ${sessionUser.token}`,
           },
           body: JSON.stringify(payload),
         },
       );
 
       if (response.ok) {
-        Alert.alert("Success", "Interests updated successfully");
-        router.back();
+        if (isOnboardingFlow) {
+          await onSubmitSuccess?.();
+        } else {
+          Alert.alert("Success", "Interests updated successfully");
+          router.back();
+        }
+      } else if (!isOnboardingFlow) {
+        Alert.alert("Error", "Failed to update interests.");
       }
     } catch (error) {
+      if (!isOnboardingFlow) {
+        Alert.alert("Error", "Could not update interests. Please try again.");
+      }
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const handlePrimaryBack = () => {
+    if (isOnboardingFlow) {
+      onBack?.();
+      return;
+    }
+    router.back();
+  };
+
   const renderStep1 = () => (
     <ScrollView contentContainerStyle={styles.scrollContent}>
       <View style={styles.headerRow}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity onPress={handlePrimaryBack} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={28} color={theme.text} />
         </TouchableOpacity>
         <Text
@@ -304,7 +357,9 @@ export default function InterestSelectionScreen() {
           {isSubmitting ? (
             <ActivityIndicator color="#FFF" />
           ) : (
-            <Text style={styles.nextBtnText}>Submit</Text>
+            <Text style={styles.nextBtnText}>
+              {isOnboardingFlow ? "Continue" : "Submit"}
+            </Text>
           )}
         </TouchableOpacity>
       </ScrollView>

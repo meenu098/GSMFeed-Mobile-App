@@ -131,6 +131,14 @@ const getConditionMeta = (value: unknown) => {
   };
 };
 
+const pickDescriptionText = (...values: unknown[]) => {
+  for (const value of values) {
+    const normalized = String(value ?? "").trim();
+    if (normalized.length > 0) return normalized;
+  }
+  return "";
+};
+
 const formatMediaUrl = (value: unknown): string => {
   const url = String(value || "").trim();
   if (!url) return "";
@@ -641,6 +649,15 @@ export const PostItem = ({
   const tradeTypeMeta = getTradeTypeMeta(tradingData?.type ?? item?.type);
   const conditionMeta = getConditionMeta(
     tradingData?.condition ?? item?.condition,
+  );
+  const descriptionText = useMemo(
+    () =>
+      pickDescriptionText(
+        tradingData?.ai_description,
+        item?.content,
+        tradingData?.description,
+      ),
+    [item?.content, tradingData?.ai_description, tradingData?.description],
   );
   const firstMediaAspectRatio = mediaAspectRatios[0] || 1;
   const fixedMediaHeight = IMAGE_WIDTH / firstMediaAspectRatio;
@@ -1171,7 +1188,7 @@ export const PostItem = ({
           style={[styles.descriptionText, { color: theme.text }]}
           numberOfLines={3}
         >
-          {item.content || tradingData.ai_description}
+          {descriptionText}
         </Text>
         <View style={styles.hashtagRow}>
           {item.hashtags?.map((h: any, index: number) => {

@@ -324,7 +324,11 @@ const ProductDescAI = ({ listingData, onNext, onBack }: any) => {
       const shapedData = new FormData();
 
       // 1. Basic Metadata
-      shapedData.append("content", listingData.remarks || "");
+      const selectedAiContent = String(
+        selectedDesc || recommendations[0] || "",
+      ).trim();
+      const fallbackRemarks = String(listingData.remarks || "").trim();
+      shapedData.append("content", selectedAiContent || fallbackRemarks);
       shapedData.append("visibility", "public");
       shapedData.append("type", "normal");
 

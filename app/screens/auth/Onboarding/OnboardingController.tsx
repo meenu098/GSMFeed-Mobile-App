@@ -6,6 +6,7 @@ import SkeletonLoader from "../../../../components/SkeletonLoader";
 import { resolveAuthenticatedRoute } from "../../../../shared/authGate";
 import CONFIG from "../../../../shared/config";
 import { clearUser, setUser } from "../../../../shared/storage";
+import InterestSelectionScreen from "../../InterestSelection";
 
 import NotificationStep from "./NotificationStep";
 import ProfilePictureStep from "./ProfilePictureStep";
@@ -190,6 +191,10 @@ const OnboardingController = () => {
     return null;
   };
 
+  const handleInterestSelectionNext = () => {
+    handleNext();
+  };
+
   const handleFinish = async () => {
     if (!userData?.token) {
       Alert.alert("Error", "User session not found.");
@@ -294,6 +299,14 @@ const OnboardingController = () => {
         />
       )}
       {step === 5 && (
+        <InterestSelectionScreen
+          mode="onboarding"
+          user={userData}
+          onSubmitSuccess={handleInterestSelectionNext}
+          onBack={handleBack}
+        />
+      )}
+      {step === 6 && (
         <FollowRecommendationsStep
           user={userData}
           onFinish={handleFinish}
