@@ -16,6 +16,7 @@ import {
   ContactsMenuIcons,
   MarketingIcon,
   MarketPlaceMenuIcons,
+  MyAppsIcon,
   NewsFeedMenuIcons,
   Settings,
 } from "../../components/icons/sidebarIcon";
@@ -148,6 +149,7 @@ export default function Sidebar() {
       label: "Notifications",
       screen: "/screens/Notifications",
     },
+    { icon: MyAppsIcon, label: "Apps", screen: "/screens/Apps" },
     { icon: Settings, label: "Settings", screen: "/screens/Settings" },
   ];
 
