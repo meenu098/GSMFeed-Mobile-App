@@ -1,14 +1,16 @@
-import {
-  Feather,
-  Ionicons,
-  MaterialCommunityIcons,
-} from "@expo/vector-icons";
+import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEventListener } from "expo";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useVideoPlayer, VideoSource, VideoView } from "expo-video";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -21,8 +23,8 @@ import {
   NativeScrollEvent,
   NativeSyntheticEvent,
   Platform,
-  Share,
   ScrollView,
+  Share,
   StatusBar,
   StyleSheet,
   Text,
@@ -31,7 +33,10 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import AngryIcon from "../../assets/reaction/angry.svg";
 import HahaIcon from "../../assets/reaction/haha.svg";
 import LikeIcon from "../../assets/reaction/like.svg";
@@ -39,12 +44,15 @@ import LoveIcon from "../../assets/reaction/love.svg";
 import SadIcon from "../../assets/reaction/sad.svg";
 import WowIcon from "../../assets/reaction/wow.svg";
 import BottomNav from "../../components/BottomNav";
-import SkeletonLoader from "../../components/SkeletonLoader";
 import SidebarOverlay from "../../components/SidebarOverlay";
+import SkeletonLoader from "../../components/SkeletonLoader";
 import { AiIcon } from "../../components/icons/icons";
 import { useFeedData } from "../../hooks/useFeedData";
 import CONFIG from "../../shared/config";
-import { extractPostSpecs, resolvePrimaryTradingFeed } from "../../shared/postSpecs";
+import {
+  extractPostSpecs,
+  resolvePrimaryTradingFeed,
+} from "../../shared/postSpecs";
 import { useTheme } from "../../shared/themeContext";
 
 const { width } = Dimensions.get("window");
@@ -164,6 +172,12 @@ type AdItem = {
 };
 
 const ADS_ITEMS: AdItem[] = [
+  {
+    id: 12,
+    src: require("../../assets/ads/iproton.mp4"),
+    srcMobile: require("../../assets/ads/iproton-mobile.mp4"),
+    link: "https://api.whatsapp.com/send?phone=971555837638&text=Hi, I found your details on gsmfeed.com and would like to learn more about your company's services.",
+  },
   {
     id: 10,
     src: require("../../assets/ads/coolmix.mp4"),
@@ -614,7 +628,10 @@ export const PostItem = ({
   const mediaUrls = useMemo(
     () =>
       normalizeMediaUrls(
-        tradingData?.images || tradingData?.media || item?.media || item?.images,
+        tradingData?.images ||
+          tradingData?.media ||
+          item?.media ||
+          item?.images,
       ),
     [item?.images, item?.media, tradingData],
   );
@@ -1341,7 +1358,9 @@ export const PostItem = ({
                     <Text style={[styles.replyText, { color: theme.subText }]}>
                       Replying to{" "}
                       <Text style={styles.replyUser}>
-                        @{replyTo?.author?.username || replyTo?.author?.user_name}
+                        @
+                        {replyTo?.author?.username ||
+                          replyTo?.author?.user_name}
                       </Text>
                     </Text>
                     <TouchableOpacity onPress={() => setReplyTo(null)}>
@@ -1380,7 +1399,6 @@ export const PostItem = ({
           </KeyboardAvoidingView>
         </SafeAreaView>
       </Modal>
-
     </View>
   );
 };
@@ -1484,11 +1502,7 @@ export default function NewsFeedScreen() {
     return () => {
       animation.stop();
     };
-  }, [
-    listingToastOpacity,
-    listingToastTranslateY,
-    showListingCreatedToast,
-  ]);
+  }, [listingToastOpacity, listingToastTranslateY, showListingCreatedToast]);
 
   const theme = screenTheme;
 
@@ -1571,7 +1585,11 @@ export default function NewsFeedScreen() {
         <SkeletonLoader variant="feed" count={3} />
       ) : error && feed.length === 0 ? (
         <View style={styles.emptyState}>
-          <Ionicons name="cloud-offline-outline" size={44} color={theme.subText} />
+          <Ionicons
+            name="cloud-offline-outline"
+            size={44}
+            color={theme.subText}
+          />
           <Text style={[styles.emptyTitle, { color: theme.text }]}>
             Couldn&apos;t load feed
           </Text>
