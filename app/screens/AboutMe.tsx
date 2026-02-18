@@ -9,22 +9,22 @@ import {
   StatusBar,
   StyleSheet,
   Text,
-  TouchableWithoutFeedback,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import SkeletonLoader from "../../components/SkeletonLoader";
-import CONFIG from "../../shared/config";
-import { useTheme } from "../../shared/themeContext";
 import {
   Bio,
   Birthday,
-  Phone,
+  CalendarIcon,
   Email,
   Location,
-  CalendarIcon,
+  Phone,
 } from "../../components/icons/icons";
+import SkeletonLoader from "../../components/SkeletonLoader";
+import CONFIG from "../../shared/config";
+import { useTheme } from "../../shared/themeContext";
 
 type AboutData = {
   storedUser: any;
@@ -32,6 +32,7 @@ type AboutData = {
   details: any;
   personal: any;
 };
+type AccountType = "individual" | "business";
 
 const parseDateSafe = (value: unknown) => {
   if (!value) return null;
@@ -91,6 +92,111 @@ const extractLabel = (value: any): string => {
   return "";
 };
 
+const getBioLabel = (data: any) => {
+  const bioFromObject =
+    data?.bio && typeof data.bio === "object"
+      ? String(
+          data?.bio?.bio || data?.bio?.about || data?.bio?.description || "",
+        ).trim()
+      : "";
+  const bioFromRoot = String(
+    data?.about || data?.description || data?.bio_text || "",
+  ).trim();
+  return bioFromObject || bioFromRoot || "Not added";
+};
+
+const getWebsiteLabel = (data: any) => {
+  const website = String(
+    data?.bio?.website ||
+      data?.website ||
+      data?.web ||
+      data?.site ||
+      data?.url ||
+      "",
+  ).trim();
+  return website || "Not added";
+};
+
+const getIndustryLabel = (data: any) => {
+  return (
+    extractLabel(data?.company_category) ||
+    extractLabel(data?.industry) ||
+    extractLabel(data?.company_industry) ||
+    extractLabel(data?.category) ||
+    "Not added"
+  );
+};
+
+const getFoundedLabel = (data: any) => {
+  const raw =
+    data?.est_year ||
+    data?.founded_year ||
+    data?.founded ||
+    data?.established_year ||
+    data?.established_on ||
+    data?.company_founded;
+
+  if (typeof raw === "number") return String(raw);
+
+  const str = String(raw || "").trim();
+  if (/^\d{4}$/.test(str)) return str;
+
+  const parsed = parseDateSafe(raw);
+  if (parsed) return format(parsed, "yyyy");
+
+  return "Not added";
+};
+
+const normalizeAccountType = (value: unknown) =>
+  String(value || "")
+    .trim()
+    .toLowerCase();
+
+const resolveAccountType = (data: any): AccountType => {
+  const explicit = normalizeAccountType(
+    data?.account_type || data?.profile_type || data?.user_type || data?.type,
+  );
+
+  if (explicit === "business" || explicit === "individual") {
+    return explicit;
+  }
+  if (explicit.includes("business") || explicit.includes("company")) {
+    return "business";
+  }
+  if (explicit.includes("individual") || explicit.includes("personal")) {
+    return "individual";
+  }
+
+  const hasBusinessSignals = Boolean(
+    extractLabel(data?.company_category) ||
+    extractLabel(data?.industry) ||
+    data?.est_year ||
+    data?.founded_year,
+  );
+  const hasPersonalSignals = Boolean(
+    data?.dob || data?.date_of_birth || extractLabel(data?.position),
+  );
+
+  if (hasBusinessSignals && !hasPersonalSignals) return "business";
+  return "individual";
+};
+
+const makeIonIcon = (name: React.ComponentProps<typeof Ionicons>["name"]) => {
+  const IonIcon = ({ width = 24, height = 24, color, fill }: any) => {
+    const sizeCandidate = Number(width) || Number(height) || 24;
+    const size = Number.isFinite(sizeCandidate) ? sizeCandidate : 24;
+    return (
+      <Ionicons name={name} size={size} color={color || fill || "#525252"} />
+    );
+  };
+  return IonIcon;
+};
+
+const JobIcon = makeIonIcon("briefcase-outline");
+const WebsiteIcon = makeIonIcon("globe-outline");
+const FoundedIcon = makeIonIcon("flag-outline");
+const IndustryIcon = makeIonIcon("business-outline");
+
 const getJobLabel = (data: any) => {
   const role =
     extractLabel(data?.position) ||
@@ -114,40 +220,94 @@ const getJobLabel = (data: any) => {
   return role || companyName || "Not added";
 };
 
-const getAboutRows = (data: any) => [
-  {
-    title: "Job",
-    Icon: Bio,
-    value: getJobLabel(data),
-  },
-  {
-    title: "Birthday",
-    Icon: Birthday,
-    value: formatDateLabel(data?.dob || data?.date_of_birth),
-  },
-  {
-    title: "Mobile",
-    Icon: Phone,
-    value: formatPhoneLabel(data),
-  },
-  {
-    title: "Email",
-    Icon: Email,
-    value: data?.email || "Not added",
-  },
-  {
-    title: "Country",
-    Icon: Location,
-    value: formatCountryLabel(data?.country || data?.country_name || data?.country_code),
-  },
-  {
-    title: "Joined On",
-    Icon: CalendarIcon,
-    value: formatDateLabel(data?.created_at || data?.createdAt || data?.joined_at),
-  },
-];
+const getAboutRows = (data: any, accountType: AccountType) => {
+  const baseRows = [
+    {
+      title: "Bio",
+      Icon: Bio,
+      value: getBioLabel(data),
+    },
+    {
+      title: "Website",
+      Icon: WebsiteIcon,
+      value: getWebsiteLabel(data),
+    },
+    {
+      title: "Mobile",
+      Icon: Phone,
+      value: formatPhoneLabel(data),
+    },
+    {
+      title: "Email",
+      Icon: Email,
+      value: data?.email || "Not added",
+    },
+    {
+      title: "Joined On",
+      Icon: CalendarIcon,
+      value: formatDateLabel(
+        data?.created_at || data?.createdAt || data?.joined_at,
+      ),
+    },
+  ];
 
-const normalizePlanName = (value: unknown) => String(value || "").trim().toLowerCase();
+  if (accountType === "business") {
+    return [
+      baseRows[0],
+      baseRows[1],
+      {
+        title: "Founded",
+        Icon: FoundedIcon,
+        value: getFoundedLabel(data),
+      },
+      baseRows[2],
+      baseRows[3],
+      {
+        title: "Headquarters",
+        Icon: Location,
+        value: formatCountryLabel(
+          data?.country || data?.country_name || data?.country_code,
+        ),
+      },
+      {
+        title: "Industry",
+        Icon: IndustryIcon,
+        value: getIndustryLabel(data),
+      },
+      baseRows[4],
+    ];
+  }
+
+  return [
+    baseRows[0],
+    {
+      title: "Job",
+      Icon: JobIcon,
+      value: getJobLabel(data),
+    },
+    baseRows[1],
+    {
+      title: "Birthday",
+      Icon: Birthday,
+      value: formatDateLabel(data?.dob || data?.date_of_birth),
+    },
+    baseRows[2],
+    baseRows[3],
+    {
+      title: "Country",
+      Icon: Location,
+      value: formatCountryLabel(
+        data?.country || data?.country_name || data?.country_code,
+      ),
+    },
+    baseRows[4],
+  ];
+};
+
+const normalizePlanName = (value: unknown) =>
+  String(value || "")
+    .trim()
+    .toLowerCase();
 
 const isPremiumPlan = (user: any) => {
   const planName = normalizePlanName(user?.subscription?.name);
@@ -189,14 +349,19 @@ const AboutRow = ({
     <View
       style={[
         styles.infoRow,
-        showDivider && { borderBottomWidth: 1, borderBottomColor: theme.border },
+        showDivider && {
+          borderBottomWidth: 1,
+          borderBottomColor: theme.border,
+        },
       ]}
     >
       <View style={styles.iconBox}>
         <Icon width={24} height={24} fill={theme.icon} color={theme.icon} />
       </View>
       <View style={styles.infoTextWrap}>
-        <Text style={[styles.infoTitle, { color: theme.titleText }]}>{title}</Text>
+        <Text style={[styles.infoTitle, { color: theme.titleText }]}>
+          {title}
+        </Text>
         <Text
           style={[
             styles.infoValue,
@@ -232,7 +397,9 @@ export default function AboutMeScreen() {
     details: {},
     personal: {},
   });
-  const [lockedFieldWarning, setLockedFieldWarning] = useState<string | null>(null);
+  const [lockedFieldWarning, setLockedFieldWarning] = useState<string | null>(
+    null,
+  );
 
   const theme = {
     bg: screenTheme.bg,
@@ -311,7 +478,26 @@ export default function AboutMeScreen() {
     [aboutData],
   );
 
-  const rows = useMemo(() => getAboutRows(mergedData), [mergedData]);
+  const accountType = useMemo(
+    () =>
+      resolveAccountType({
+        ...mergedData,
+        account_type:
+          mergedData?.account_type ||
+          aboutData?.profile?.account_type ||
+          aboutData?.storedUser?.account_type,
+      }),
+    [
+      aboutData?.profile?.account_type,
+      aboutData?.storedUser?.account_type,
+      mergedData,
+    ],
+  );
+
+  const rows = useMemo(
+    () => getAboutRows(mergedData, accountType),
+    [accountType, mergedData],
+  );
 
   const targetUserId = useMemo(
     () => (Array.isArray(userId) ? userId[0] : userId),
@@ -399,7 +585,7 @@ export default function AboutMeScreen() {
       )}
     </SafeAreaView>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: { flex: 1 },

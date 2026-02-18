@@ -22,26 +22,92 @@ const TONES = [
   { label: "Simple", value: "Simple" },
 ];
 
-const normalizeImageUris = (value: unknown): string[] => {
+type UploadableImage = {
+  uri: string;
+  name: string;
+  type: string;
+};
+
+const extensionToMimeType: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  gif: "image/gif",
+  bmp: "image/bmp",
+  heic: "image/heic",
+  heif: "image/heif",
+};
+
+const inferFileMeta = (
+  uri: string,
+  index: number,
+): { name: string; type: string } => {
+  const cleanUri = uri.split("?")[0] || uri;
+  const fileNameCandidate = cleanUri.split("/").pop() || "";
+  const hasExtension = fileNameCandidate.includes(".");
+  const generatedName = `photo-${Date.now()}-${index}.jpg`;
+  const name = hasExtension ? fileNameCandidate : generatedName;
+  const extension = name.split(".").pop()?.toLowerCase() || "jpg";
+  const type = extensionToMimeType[extension] || "image/jpeg";
+  return { name, type };
+};
+
+const normalizeMimeType = (value: unknown, fallbackType: string): string => {
+  const raw = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (!raw || raw === "image" || raw === "file") return fallbackType;
+  if (raw.startsWith("image/")) return raw;
+  return extensionToMimeType[raw] || fallbackType;
+};
+
+const normalizeUploadImages = (value: unknown): UploadableImage[] => {
   if (!value) return [];
 
-  if (Array.isArray(value)) {
-    return value
-      .map((item: any) => {
-        if (typeof item === "string") return item;
-        if (item && typeof item === "object" && typeof item.uri === "string") {
-          return item.uri;
-        }
-        return "";
-      })
-      .filter((uri) => uri.length > 0);
-  }
+  const inputItems = Array.isArray(value) ? value : [value];
+  const output: UploadableImage[] = [];
+  const seenUris = new Set<string>();
 
-  if (typeof value === "string") {
-    return value.trim().length > 0 ? [value] : [];
-  }
+  inputItems.forEach((item: any, index) => {
+    let uri = "";
+    let name = "";
+    let type = "";
 
-  return [];
+    if (typeof item === "string") {
+      uri = item.trim();
+      if (!uri) return;
+      const inferred = inferFileMeta(uri, index);
+      name = inferred.name;
+      type = inferred.type;
+    } else if (
+      item &&
+      typeof item === "object" &&
+      typeof item.uri === "string"
+    ) {
+      uri = item.uri.trim();
+      if (!uri) return;
+      const inferred = inferFileMeta(uri, index);
+      name =
+        (typeof item.name === "string" && item.name.trim()) ||
+        (typeof item.fileName === "string" && item.fileName.trim()) ||
+        inferred.name;
+      type = normalizeMimeType(
+        (typeof item.type === "string" && item.type.trim()) ||
+          (typeof item.mimeType === "string" && item.mimeType.trim()) ||
+          inferred.type,
+        inferred.type,
+      );
+    } else {
+      return;
+    }
+
+    if (seenUris.has(uri)) return;
+    seenUris.add(uri);
+    output.push({ uri, name, type });
+  });
+
+  return output;
 };
 
 const ProductDescAI = ({ listingData, onNext, onBack }: any) => {
@@ -71,24 +137,76 @@ const ProductDescAI = ({ listingData, onNext, onBack }: any) => {
   ];
 
   const mapTypeToTradingType = (type: string | undefined) => {
-    return type?.toLowerCase() === "buy" ? "WTB" : "WTS";
+    return type?.toLowerCase() === "buy" ? "wtb" : "wts";
   };
 
   const mapCondition = (condition: string | undefined) => {
-    return condition?.toUpperCase() === "USED" ? "USED" : "NEW";
+    return condition?.toUpperCase() === "USED" ? "used" : "new";
   };
 
-  const toUploadFile = (uri: string, index: number) => {
-    const cleanUri = uri.split("?")[0] || uri;
-    const extension = cleanUri.split(".").pop()?.toLowerCase();
-    const mime =
-      extension === "png"
-        ? "image/png"
-        : extension === "webp"
-          ? "image/webp"
-          : "image/jpeg";
-    const name = `photo-${Date.now()}-${index}.${extension || "jpg"}`;
-    return { uri, name, type: mime } as any;
+  const selectionEndpointByField: Record<
+    "storage" | "color" | "spec" | "grade",
+    string
+  > = {
+    storage: "selections/storage",
+    color: "selections/colors",
+    spec: "selections/specs",
+    grade: "selection/grades",
+  };
+
+  const selectionIdCache = new Map<string, string | null>();
+
+  const resolveSelectionId = async (
+    field: "storage" | "color" | "spec" | "grade",
+    rawValue: unknown,
+  ) => {
+    const normalized = String(rawValue ?? "").trim();
+    if (!normalized) return null;
+
+    const key = `${field}:${normalized.toLowerCase()}`;
+    if (selectionIdCache.has(key)) {
+      return selectionIdCache.get(key) || null;
+    }
+
+    try {
+      const endpoint = selectionEndpointByField[field];
+      const response = await fetch(
+        `${CONFIG.API_ENDPOINT}/api/${endpoint}?search=${encodeURIComponent(normalized)}`,
+      );
+      if (!response.ok) {
+        selectionIdCache.set(key, null);
+        return null;
+      }
+
+      const result = await response.json();
+      const options = Array.isArray(result?.data) ? result.data : [];
+
+      const exactMatch =
+        options.find(
+          (entry: any) =>
+            String(entry?.name ?? "")
+              .trim()
+              .toLowerCase() === normalized.toLowerCase(),
+        ) || options[0];
+
+      const resolvedId =
+        exactMatch?.id !== undefined && exactMatch?.id !== null
+          ? String(exactMatch.id)
+          : null;
+
+      selectionIdCache.set(key, resolvedId);
+      return resolvedId;
+    } catch {
+      selectionIdCache.set(key, null);
+      return null;
+    }
+  };
+
+  const toUploadFile = (image: UploadableImage, index: number) => {
+    const inferred = inferFileMeta(image.uri, index);
+    const type = normalizeMimeType(image.type, inferred.type);
+    const name = image.name || inferred.name;
+    return { uri: image.uri, name, type } as any;
   };
 
   const parseAiSuggestions = (rawData: any): string[] => {
@@ -107,7 +225,9 @@ const ProductDescAI = ({ listingData, onNext, onBack }: any) => {
     }
 
     if (rawData && typeof rawData === "object") {
-      return Object.values(rawData).map((item) => String(item)).filter(Boolean);
+      return Object.values(rawData)
+        .map((item) => String(item))
+        .filter(Boolean);
     }
 
     return [];
@@ -184,10 +304,7 @@ const ProductDescAI = ({ listingData, onNext, onBack }: any) => {
       }
     } catch (error) {
       console.error("AI Fetch Error:", error);
-      Alert.alert(
-        "Connection Error",
-        "Could not reach AI service.",
-      );
+      Alert.alert("Connection Error", "Could not reach AI service.");
     } finally {
       setIsCompiling(false);
     }
@@ -218,9 +335,47 @@ const ProductDescAI = ({ listingData, onNext, onBack }: any) => {
         });
       }
 
-      products.forEach((product: any, index: number) => {
+      const allUploadImages = products.flatMap((product: any) =>
+        normalizeUploadImages(product?.images),
+      );
+      const unsupportedImage = allUploadImages.find((image: any) => {
+        const lowerType = String(image?.type || "").toLowerCase();
+        const lowerName = String(image?.name || "").toLowerCase();
+        const uri = String(image?.uri || "").toLowerCase();
+        return (
+          uri.startsWith("ph://") ||
+          lowerType.includes("heic") ||
+          lowerType.includes("heif") ||
+          lowerName.endsWith(".heic") ||
+          lowerName.endsWith(".heif")
+        );
+      });
+
+      if (unsupportedImage) {
+        Alert.alert(
+          "Unsupported Image",
+          "Please upload JPG or PNG images. HEIC/HEIF photos are not supported by this API.",
+        );
+        return;
+      }
+
+      for (const [index, product] of products.entries()) {
         const aiDescription =
           selectedDesc || recommendations[0] || product?.remarks || "";
+
+        const storageId =
+          product.storageId ||
+          (await resolveSelectionId("storage", product.storage));
+        const colorId =
+          product.colorId || (await resolveSelectionId("color", product.color));
+        const specId =
+          product.specsId || (await resolveSelectionId("spec", product.specs));
+        const isUsedProduct =
+          String(product.condition || "").toLowerCase() === "used";
+        const gradeId = isUsedProduct
+          ? product.gradeId ||
+            (await resolveSelectionId("grade", product.grade))
+          : null;
 
         shapedData.append(
           `trading_feeds[${index}][type]`,
@@ -238,35 +393,83 @@ const ProductDescAI = ({ listingData, onNext, onBack }: any) => {
             product.model || "",
           );
           shapedData.append(`trading_feeds[${index}][brand]`, "Apple");
-          shapedData.append(`trading_feeds[${index}][category]`, "Mobile Phones");
+          shapedData.append(
+            `trading_feeds[${index}][category]`,
+            "Mobile Phones",
+          );
         }
 
         shapedData.append(
           `trading_feeds[${index}][condition]`,
           mapCondition(product.condition),
         );
-        if (String(product.condition || "").toLowerCase() === "used" && product.gradeId) {
+        if (gradeId) {
           shapedData.append(
             `trading_feeds[${index}][grade_id]`,
-            String(product.gradeId),
+            String(gradeId),
           );
         }
-        shapedData.append(
-          `trading_feeds[${index}][storage_id]`,
-          String(product.storageId || ""),
-        );
-        shapedData.append(
-          `trading_feeds[${index}][color_id]`,
-          String(product.colorId || ""),
-        );
-        shapedData.append(
-          `trading_feeds[${index}][spec_id]`,
-          String(product.specsId || ""),
-        );
-        shapedData.append(
-          `trading_feeds[${index}][qty]`,
-          String(product.quantity || 1),
-        );
+        if (isUsedProduct && product.grade) {
+          shapedData.append(
+            `trading_feeds[${index}][grade_name]`,
+            String(product.grade),
+          );
+          shapedData.append(
+            `trading_feeds[${index}][grade]`,
+            String(product.grade),
+          );
+        }
+        if (storageId) {
+          shapedData.append(
+            `trading_feeds[${index}][storage_id]`,
+            String(storageId),
+          );
+        }
+        if (product.storage) {
+          shapedData.append(
+            `trading_feeds[${index}][storage_name]`,
+            String(product.storage),
+          );
+          shapedData.append(
+            `trading_feeds[${index}][storage]`,
+            String(product.storage),
+          );
+        }
+        if (colorId) {
+          shapedData.append(
+            `trading_feeds[${index}][color_id]`,
+            String(colorId),
+          );
+        }
+        if (product.color) {
+          shapedData.append(
+            `trading_feeds[${index}][color_name]`,
+            String(product.color),
+          );
+          shapedData.append(
+            `trading_feeds[${index}][color]`,
+            String(product.color),
+          );
+        }
+        if (specId) {
+          shapedData.append(`trading_feeds[${index}][spec_id]`, String(specId));
+        }
+        if (product.specs) {
+          shapedData.append(
+            `trading_feeds[${index}][spec_name]`,
+            String(product.specs),
+          );
+          shapedData.append(
+            `trading_feeds[${index}][spec]`,
+            String(product.specs),
+          );
+          shapedData.append(
+            `trading_feeds[${index}][psec]`,
+            String(product.specs),
+          );
+        }
+        const qtyValue = String(product.quantity ?? "").trim();
+        shapedData.append(`trading_feeds[${index}][qty]`, qtyValue || "1");
         shapedData.append(
           `trading_feeds[${index}][currency]`,
           (product.currency || "usd").toLowerCase(),
@@ -296,14 +499,22 @@ const ProductDescAI = ({ listingData, onNext, onBack }: any) => {
           });
         }
 
-        const productImages = normalizeImageUris(product?.images);
-        productImages.forEach((uri: string, imageIndex: number) => {
+        const productImages = normalizeUploadImages(product?.images);
+        productImages.forEach((image: UploadableImage, imageIndex: number) => {
+          const imageUri = String(image?.uri || "").trim();
+          if (
+            !imageUri ||
+            imageUri.startsWith("http://") ||
+            imageUri.startsWith("https://")
+          ) {
+            return;
+          }
           shapedData.append(
-            `trading_feeds[${index}][images][]`,
-            toUploadFile(uri, imageIndex),
+            `trading_feeds[${index}][images][${imageIndex}]`,
+            toUploadFile(image, imageIndex),
           );
         });
-      });
+      }
 
       // 6. Submit to API
       const res = await fetch(`${CONFIG.API_ENDPOINT}/api/feed/new-post`, {
@@ -317,12 +528,47 @@ const ProductDescAI = ({ listingData, onNext, onBack }: any) => {
 
       const result = await res.json();
       if (res.ok && result.status) {
-        onNext({ selectedDesc });
+        const createdPostId =
+          result?.data?.main_post_id ??
+          result?.data?.post_id ??
+          result?.data?.id ??
+          result?.post_id ??
+          result?.id;
+
+        onNext({
+          selectedDesc,
+          postId: createdPostId ? String(createdPostId) : undefined,
+        });
       } else {
         // Improved error reporting
+        const hasHeicImage = products.some((product: any) =>
+          normalizeUploadImages(product?.images).some((image) => {
+            const lowerType = String(image?.type || "").toLowerCase();
+            const lowerName = String(image?.name || "").toLowerCase();
+            return (
+              lowerType.includes("heic") ||
+              lowerType.includes("heif") ||
+              lowerName.endsWith(".heic") ||
+              lowerName.endsWith(".heif")
+            );
+          }),
+        );
         const errorMsg = result.errors
           ? Object.values(result.errors).flat().join("\n")
           : result.message;
+        if (
+          hasHeicImage &&
+          String(errorMsg || "")
+            .toLowerCase()
+            .includes("must be an image")
+        ) {
+          Alert.alert(
+            "Validation Error",
+            `${errorMsg}\n\nYour photo appears to be HEIC/HEIF. Please upload JPG/PNG, or set iPhone Camera > Formats to Most Compatible.`,
+          );
+          return;
+        }
+
         Alert.alert("Validation Error", errorMsg);
       }
     } catch (error) {

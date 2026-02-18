@@ -2,7 +2,6 @@ import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import BroadcastSelection from "../screens/BroadCastSelection";
 import BuyForm from "./ListingForms/BuyForm";
-import ListingSuccess from "./ListingForms/ListingSuccess";
 import ListingSummary from "./ListingForms/ListingSummary";
 import ProductDescAI from "./ListingForms/ProductDescAI";
 import SellForm from "./ListingForms/SellForm";
@@ -24,6 +23,15 @@ const BroadcastManager = () => {
     hashtags: [],
   });
 
+  const resetFlowState = () => {
+    setStep(1);
+    setProducts([]);
+    setEditingIndex(null);
+    setSummaryData({ remarks: "", hashtags: [] });
+    setCurrentView("selection");
+    setIsModalVisible(true);
+  };
+
   const handleSelection = (type: "Sell" | "Buy") => {
     setIsModalVisible(false);
     setCurrentView(type === "Sell" ? "sell" : "buy");
@@ -31,12 +39,7 @@ const BroadcastManager = () => {
   };
 
   const handleBackToSelection = () => {
-    setCurrentView("selection");
-    setIsModalVisible(true);
-    setStep(1);
-    setProducts([]);
-    setEditingIndex(null);
-    setSummaryData({ remarks: "", hashtags: [] });
+    resetFlowState();
   };
 
   const handleFormNext = (data: any) => {
@@ -63,18 +66,16 @@ const BroadcastManager = () => {
     setStep(2.5);
   };
 
-  const handleAiNext = () => {
-    setStep(3);
-  };
-
-  const handleFinish = () => {
-    setStep(1);
-    setProducts([]);
-    setEditingIndex(null);
-    setSummaryData({ remarks: "", hashtags: [] });
-    setCurrentView("selection");
-    setIsModalVisible(true);
-    router.replace("/screens/Newsfeed");
+  const handleAiNext = (result?: { postId?: string }) => {
+    resetFlowState();
+    router.replace({
+      pathname: "/screens/Newsfeed",
+      params: {
+        listingCreated: "1",
+        listingCreatedAt: String(Date.now()),
+        ...(result?.postId ? { postId: result.postId } : {}),
+      },
+    });
   };
 
   const listingData = {
@@ -83,10 +84,6 @@ const BroadcastManager = () => {
     remarks: summaryData.remarks,
     hashtags: summaryData.hashtags,
   };
-
-  if (step === 3) {
-    return <ListingSuccess onFinish={handleFinish} />;
-  }
 
   if (step === 2.5 && products.length > 0) {
     return (

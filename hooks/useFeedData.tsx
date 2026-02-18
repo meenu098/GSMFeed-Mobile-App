@@ -2,12 +2,14 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const REQUEST_TIMEOUT_MS = 12000;
+const MIN_INITIAL_SKELETON_MS = 450;
 
 export const useFeedData = (rootUrl: string) => {
   const [feed, setFeed] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const isLoadingRef = useRef(false);
+  const firstLoadRef = useRef(true);
 
   useEffect(() => {
     isLoadingRef.current = isLoading;
@@ -15,15 +17,17 @@ export const useFeedData = (rootUrl: string) => {
 
   const fetchFeed = useCallback(
     async (pageNum = 1) => {
-      if (isLoadingRef.current) return;
+      const isInitialLoad = firstLoadRef.current && pageNum === 1;
+      if (isLoadingRef.current && !isInitialLoad) return;
       setIsLoading(true);
       setError(null);
+      const startedAt = Date.now();
 
       try {
         const userString = await AsyncStorage.getItem("user");
         if (!userString) {
           setError("Session not found. Please login again.");
-          setIsLoading(false);
+          setFeed([]);
           return;
         }
         const userObj = JSON.parse(userString);
@@ -60,6 +64,15 @@ export const useFeedData = (rootUrl: string) => {
           setError("Unable to connect to server. Please try again.");
         }
       } finally {
+        if (isInitialLoad) {
+          const elapsed = Date.now() - startedAt;
+          if (elapsed < MIN_INITIAL_SKELETON_MS) {
+            await new Promise((resolve) =>
+              setTimeout(resolve, MIN_INITIAL_SKELETON_MS - elapsed),
+            );
+          }
+          firstLoadRef.current = false;
+        }
         setIsLoading(false);
       }
     },

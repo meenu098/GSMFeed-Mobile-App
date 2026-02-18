@@ -14,7 +14,8 @@ export type SkeletonVariant =
   | "profile"
   | "profilePage"
   | "form"
-  | "chat";
+  | "chat"
+  | "membersGrid";
 
 type SkeletonBlockProps = {
   width?: number | `${number}%` | "100%";
@@ -37,7 +38,8 @@ const SkeletonBlock = ({
   style,
 }: SkeletonBlockProps) => {
   const { isDark } = useTheme();
-  const pulse = useRef(new Animated.Value(0.45)).current;
+  const pulse = useRef(new Animated.Value(0.8)).current;
+  const baseColor = isDark ? "#475569" : "#94A3B8";
 
   useEffect(() => {
     const loop = Animated.loop(
@@ -45,12 +47,12 @@ const SkeletonBlock = ({
         Animated.timing(pulse, {
           toValue: 1,
           duration: 700,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
         Animated.timing(pulse, {
-          toValue: 0.45,
+          toValue: 0.72,
           duration: 700,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
       ]),
     );
@@ -66,7 +68,9 @@ const SkeletonBlock = ({
           height,
           borderRadius: radius,
           opacity: pulse,
-          backgroundColor: isDark ? "#1E293B" : "#E2E8F0",
+          backgroundColor: baseColor,
+          borderWidth: 1,
+          borderColor: isDark ? "#64748B" : "#BFCBDD",
         },
         style,
       ]}
@@ -237,6 +241,23 @@ const ChatSkeleton = () => (
   </View>
 );
 
+const MembersGridSkeleton = ({ count }: { count: number }) => (
+  <View style={styles.membersGrid}>
+    {Array.from({ length: count }).map((_, idx) => (
+      <View key={`members-grid-${idx}`} style={styles.membersGridItem}>
+        <View style={styles.membersCard}>
+          <SkeletonBlock width="100%" height={54} radius={8} />
+          <SkeletonBlock width={52} height={52} radius={26} style={styles.membersAvatar} />
+          <SkeletonBlock width="76%" height={14} radius={7} style={styles.mt8} />
+          <SkeletonBlock width="62%" height={11} radius={6} style={styles.mt8} />
+          <SkeletonBlock width="52%" height={11} radius={6} style={styles.mt8} />
+          <SkeletonBlock width={90} height={30} radius={10} style={styles.mt12} />
+        </View>
+      </View>
+    ))}
+  </View>
+);
+
 const getVariantContent = (variant: SkeletonVariant, count: number) => {
   switch (variant) {
     case "feed":
@@ -258,6 +279,8 @@ const getVariantContent = (variant: SkeletonVariant, count: number) => {
       return <FormSkeleton />;
     case "chat":
       return <ChatSkeleton />;
+    case "membersGrid":
+      return <MembersGridSkeleton count={count} />;
     case "list":
     default:
       return (
@@ -461,5 +484,23 @@ const styles = StyleSheet.create({
   },
   chatRight: {
     alignItems: "flex-end",
+  },
+  membersGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+  },
+  membersGridItem: {
+    width: "48.5%",
+    marginBottom: 12,
+  },
+  membersCard: {
+    borderRadius: 14,
+    overflow: "hidden",
+    alignItems: "center",
+    paddingBottom: 10,
+  },
+  membersAvatar: {
+    marginTop: -24,
   },
 });

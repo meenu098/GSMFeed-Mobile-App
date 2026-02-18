@@ -1,6 +1,5 @@
 import {
   Feather,
-  FontAwesome,
   Ionicons,
   MaterialCommunityIcons,
 } from "@expo/vector-icons";
@@ -9,10 +8,10 @@ import { useEventListener } from "expo";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useVideoPlayer, VideoSource, VideoView } from "expo-video";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Clipboard,
+  Animated,
   Dimensions,
   FlatList,
   Image,
@@ -22,6 +21,7 @@ import {
   NativeScrollEvent,
   NativeSyntheticEvent,
   Platform,
+  Share,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -31,7 +31,7 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import AngryIcon from "../../assets/reaction/angry.svg";
 import HahaIcon from "../../assets/reaction/haha.svg";
 import LikeIcon from "../../assets/reaction/like.svg";
@@ -44,6 +44,7 @@ import SidebarOverlay from "../../components/SidebarOverlay";
 import { AiIcon } from "../../components/icons/icons";
 import { useFeedData } from "../../hooks/useFeedData";
 import CONFIG from "../../shared/config";
+import { extractPostSpecs, resolvePrimaryTradingFeed } from "../../shared/postSpecs";
 import { useTheme } from "../../shared/themeContext";
 
 const { width } = Dimensions.get("window");
@@ -120,6 +121,30 @@ const getConditionMeta = (value: unknown) => {
     bg: "#EEF2FF",
     text: "#6366F1",
   };
+};
+
+const formatMediaUrl = (value: unknown): string => {
+  const url = String(value || "").trim();
+  if (!url) return "";
+  return url
+    .replace("http://localhost:8000", CONFIG.API_ENDPOINT)
+    .replace("https://localhost:8000", CONFIG.API_ENDPOINT);
+};
+
+const normalizeMediaUrls = (value: unknown): string[] => {
+  if (!value) return [];
+  const rawItems = Array.isArray(value) ? value : [value];
+  return rawItems
+    .map((item: any) => {
+      if (typeof item === "string") return formatMediaUrl(item);
+      if (item && typeof item === "object") {
+        return formatMediaUrl(
+          item?.url || item?.uri || item?.src || item?.path || item?.image,
+        );
+      }
+      return "";
+    })
+    .filter((url) => url.length > 0);
 };
 
 const REACTION_TYPES = [
@@ -539,6 +564,7 @@ export const PostItem = ({
   onAutoOpenHandled,
 }: any) => {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [activeIndex, setActiveIndex] = useState(0);
   const resolveIsSaved = useCallback((value: any) => {
     if (typeof value === "boolean") return value;
@@ -547,8 +573,6 @@ export const PostItem = ({
     return false;
   }, []);
   const [isSaved, setIsSaved] = useState(resolveIsSaved(item.is_saved));
-  const [shareVisible, setShareVisible] = useState(false);
-  const [linkCopied, setLinkCopied] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const [myReaction, setMyReaction] = useState(item.my_reaction);
   const [commentsVisible, setCommentsVisible] = useState(false);
@@ -585,9 +609,16 @@ export const PostItem = ({
   const [commentCount, setCommentCount] =
     useState<number>(initialCommentsCount);
 
-  const tradingData = item.trading_feeds?.[0] || {};
+  const tradingData = useMemo(() => resolvePrimaryTradingFeed(item), [item]);
   const author = item.author || {};
-  const mediaUrls = tradingData.images || item.media || [];
+  const mediaUrls = useMemo(
+    () =>
+      normalizeMediaUrls(
+        tradingData?.images || tradingData?.media || item?.media || item?.images,
+      ),
+    [item?.images, item?.media, tradingData],
+  );
+  const specs = extractPostSpecs(item, tradingData);
   const postId = item.main_post_id ?? item.id;
   const pageLink = `${CONFIG.APP_URL}/feed/post/${postId}`;
   const tradeTypeMeta = getTradeTypeMeta(tradingData?.type ?? item?.type);
@@ -619,11 +650,10 @@ export const PostItem = ({
 
   useEffect(() => {
     let active = true;
-    const urls: string[] = item.trading_feeds?.[0]?.images || item.media || [];
     setActiveIndex(0);
     setMediaAspectRatios({});
 
-    const firstUrl = urls[0];
+    const firstUrl = mediaUrls[0];
     if (firstUrl) {
       Image.getSize(
         firstUrl,
@@ -643,7 +673,7 @@ export const PostItem = ({
     return () => {
       active = false;
     };
-  }, [item]);
+  }, [mediaUrls]);
 
   // API: Record Interaction Stat
   const postInteractStatTrigger = useCallback(async () => {
@@ -670,35 +700,18 @@ export const PostItem = ({
     setIsSaved(resolveIsSaved(item.is_saved));
   }, [item.is_saved, resolveIsSaved]);
 
-  useEffect(() => {
-    if (!shareVisible) {
-      setLinkCopied(false);
-    }
-  }, [shareVisible]);
-
-  const handleCopyLink = useCallback(async () => {
+  const handleNativeShare = useCallback(async () => {
     try {
-      Clipboard.setString(pageLink);
-      setLinkCopied(true);
+      await Share.share(
+        {
+          title: "Share post",
+          message: `Check out this post on gsmfeed:\n${pageLink}`,
+          url: pageLink,
+        },
+        { dialogTitle: "Share post" },
+      );
     } catch (error) {}
   }, [pageLink]);
-
-  const handleShareTo = useCallback(
-    async (platform: "facebook" | "whatsapp" | "twitter") => {
-      const encodedLink = encodeURIComponent(pageLink);
-      const urlMap: Record<string, string> = {
-        facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodedLink}`,
-        whatsapp: `https://wa.me/?text=${encodedLink}`,
-        twitter: `https://twitter.com/intent/tweet?url=${encodedLink}`,
-      };
-      const targetUrl = urlMap[platform];
-      if (!targetUrl) return;
-      try {
-        await Linking.openURL(targetUrl);
-      } catch (error) {}
-    },
-    [pageLink],
-  );
 
   const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     setActiveIndex(Math.round(e.nativeEvent.contentOffset.x / IMAGE_WIDTH));
@@ -968,26 +981,24 @@ export const PostItem = ({
 
   // Helper: Specs Rendering (Fixes String Error)
   const renderSpecs = () => {
-    if (
-      !tradingData ||
-      (!tradingData.storage && !tradingData.grade && !tradingData.qty)
-    )
-      return null;
+    const items = [
+      { key: "qty", label: "Qty", value: specs.qty },
+      { key: "storage", label: "Storage", value: specs.storage },
+      { key: "grade", label: "Grade", value: specs.grade },
+      { key: "spec", label: "Spec", value: specs.spec },
+    ].filter((entry) => entry.value !== null);
+
+    if (!items.length) return null;
+
     return (
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         style={styles.specsRow}
       >
-        {tradingData.storage?.name ? (
-          <SpecItem label="Storage" value={tradingData.storage.name} />
-        ) : null}
-        {tradingData.grade?.name ? (
-          <SpecItem label="Grade" value={tradingData.grade.name} />
-        ) : null}
-        {tradingData.qty ? (
-          <SpecItem label="Qty" value={tradingData.qty} />
-        ) : null}
+        {items.map((entry) => (
+          <SpecItem key={entry.key} label={entry.label} value={entry.value} />
+        ))}
       </ScrollView>
     );
   };
@@ -1198,7 +1209,7 @@ export const PostItem = ({
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.actionBtn}
-            onPress={() => setShareVisible(true)}
+            onPress={handleNativeShare}
           >
             <Ionicons
               name="share-social-outline"
@@ -1239,7 +1250,7 @@ export const PostItem = ({
       >
         <SafeAreaView
           style={styles.commentModalOverlay}
-          edges={["top", "left", "right"]}
+          edges={["top", "left", "right", "bottom"]}
         >
           <LinearGradient
             colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.25)", "rgba(0,0,0,0.4)"]}
@@ -1247,190 +1258,129 @@ export const PostItem = ({
             style={styles.commentBackdrop}
             pointerEvents="none"
           />
-          <View
-            style={[styles.commentModal, { backgroundColor: theme.cardBg }]}
+          <KeyboardAvoidingView
+            style={styles.commentKeyboardAvoid}
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 0}
           >
-            <View style={styles.commentHeader}>
-              <Text style={[styles.commentTitle, { color: theme.text }]}>
-                Comments
-              </Text>
-              <TouchableOpacity
-                onPress={() => {
-                  setCommentsVisible(false);
-                  setReplyTo(null);
-                  setActiveCommentPickerId(null);
-                }}
-              >
-                <Feather name="x" size={22} color={theme.text} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView
-              style={styles.commentList}
-              contentContainerStyle={{ paddingBottom: 10 }}
-              showsVerticalScrollIndicator={false}
+            <View
+              style={[styles.commentModal, { backgroundColor: theme.cardBg }]}
             >
-              {commentsLoading ? (
-                <View style={styles.commentLoading}>
-                  <ActivityIndicator color={theme.primary} />
-                </View>
-              ) : comments.length === 0 ? (
-                <Text
-                  style={[styles.commentEmptyText, { color: theme.subText }]}
-                >
-                  No comments yet.
+              <View style={styles.commentHeader}>
+                <Text style={[styles.commentTitle, { color: theme.text }]}>
+                  Comments
                 </Text>
-              ) : (
-                comments.map((comment) => (
-                  <CommentItem
-                    key={comment.id}
-                    comment={comment}
-                    theme={theme}
-                    replyMap={replyMap}
-                    replyLoadingMap={replyLoadingMap}
-                    replyNextMap={replyNextMap}
-                    replyPageMap={replyPageMap}
-                    onLoadReplies={(id) => fetchReplies(id, 1)}
-                    onLoadMoreReplies={(id, nextPage) =>
-                      fetchReplies(id, nextPage)
-                    }
-                    onReply={(c) => setReplyTo(c)}
-                    onReact={handleCommentReact}
-                    onTogglePicker={(id) =>
-                      setActiveCommentPickerId((prev) =>
-                        prev === id ? null : id,
-                      )
-                    }
-                    activePickerId={activeCommentPickerId}
-                  />
-                ))
-              )}
-            </ScrollView>
-
-            <KeyboardAvoidingView
-              behavior={Platform.OS === "ios" ? "padding" : undefined}
-            >
-              {replyTo ? (
-                <View style={styles.replyBar}>
-                  <Text style={[styles.replyText, { color: theme.subText }]}>
-                    Replying to{" "}
-                    <Text style={styles.replyUser}>
-                      @{replyTo?.author?.username || replyTo?.author?.user_name}
-                    </Text>
-                  </Text>
-                  <TouchableOpacity onPress={() => setReplyTo(null)}>
-                    <Feather name="x" size={16} color={theme.subText} />
-                  </TouchableOpacity>
-                </View>
-              ) : null}
-              <View style={styles.commentInputRow}>
-                <TextInput
-                  value={commentText}
-                  onChangeText={setCommentText}
-                  placeholder="Write a comment..."
-                  placeholderTextColor={theme.subText}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  style={[
-                    styles.commentInput,
-                    { color: theme.text, borderColor: theme.border },
-                  ]}
-                  multiline
-                />
                 <TouchableOpacity
-                  style={styles.sendBtn}
-                  onPress={handleSendComment}
-                  disabled={commentSubmitting}
+                  onPress={() => {
+                    setCommentsVisible(false);
+                    setReplyTo(null);
+                    setActiveCommentPickerId(null);
+                  }}
                 >
-                  <Feather
-                    name="send"
-                    size={18}
-                    color={commentSubmitting ? "#94A3B8" : theme.primary}
-                  />
+                  <Feather name="x" size={22} color={theme.text} />
                 </TouchableOpacity>
               </View>
-            </KeyboardAvoidingView>
-          </View>
-        </SafeAreaView>
-      </Modal>
 
-      <Modal
-        visible={shareVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShareVisible(false)}
-      >
-        <View style={styles.shareModalOverlay}>
-          <View
-            style={[styles.shareModalCard, { backgroundColor: theme.cardBg }]}
-          >
-            <View style={styles.shareHeader}>
-              <Text style={[styles.shareTitle, { color: theme.text }]}>
-                Share
-              </Text>
-              <TouchableOpacity onPress={() => setShareVisible(false)}>
-                <Feather name="x" size={20} color={theme.text} />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.shareIconRow}>
-              <TouchableOpacity
-                style={[styles.shareIconBtn, { backgroundColor: "#1877F2" }]}
-                onPress={() => handleShareTo("facebook")}
+              <ScrollView
+                style={styles.commentList}
+                contentContainerStyle={{ paddingBottom: 10 }}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode={
+                  Platform.OS === "ios" ? "interactive" : "on-drag"
+                }
               >
-                <FontAwesome name="facebook" size={20} color="white" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.shareIconBtn, { backgroundColor: "#25D366" }]}
-                onPress={() => handleShareTo("whatsapp")}
-              >
-                <FontAwesome name="whatsapp" size={20} color="white" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.shareIconBtn, { backgroundColor: "#0F172A" }]}
-                onPress={() => handleShareTo("twitter")}
-              >
-                <FontAwesome name="twitter" size={20} color="white" />
-              </TouchableOpacity>
-            </View>
-            <Text style={[styles.shareLabel, { color: theme.subText }]}>
-              Page Link
-            </Text>
-            <View style={styles.shareLinkRow}>
+                {commentsLoading ? (
+                  <View style={styles.commentLoading}>
+                    <ActivityIndicator color={theme.primary} />
+                  </View>
+                ) : comments.length === 0 ? (
+                  <Text
+                    style={[styles.commentEmptyText, { color: theme.subText }]}
+                  >
+                    No comments yet.
+                  </Text>
+                ) : (
+                  comments.map((comment) => (
+                    <CommentItem
+                      key={comment.id}
+                      comment={comment}
+                      theme={theme}
+                      replyMap={replyMap}
+                      replyLoadingMap={replyLoadingMap}
+                      replyNextMap={replyNextMap}
+                      replyPageMap={replyPageMap}
+                      onLoadReplies={(id) => fetchReplies(id, 1)}
+                      onLoadMoreReplies={(id, nextPage) =>
+                        fetchReplies(id, nextPage)
+                      }
+                      onReply={(c) => setReplyTo(c)}
+                      onReact={handleCommentReact}
+                      onTogglePicker={(id) =>
+                        setActiveCommentPickerId((prev) =>
+                          prev === id ? null : id,
+                        )
+                      }
+                      activePickerId={activeCommentPickerId}
+                    />
+                  ))
+                )}
+              </ScrollView>
+
               <View
                 style={[
-                  styles.shareLinkBox,
+                  styles.commentComposer,
                   {
-                    borderColor: theme.border,
-                    backgroundColor: theme.isDark ? "#0F172A" : "#F8FAFC",
+                    paddingBottom:
+                      Platform.OS === "ios" ? Math.max(insets.bottom, 8) : 8,
                   },
                 ]}
               >
-                <TextInput
-                  value={pageLink}
-                  editable={false}
-                  selectTextOnFocus
-                  style={[styles.shareLinkInput, { color: theme.text }]}
-                />
+                {replyTo ? (
+                  <View style={styles.replyBar}>
+                    <Text style={[styles.replyText, { color: theme.subText }]}>
+                      Replying to{" "}
+                      <Text style={styles.replyUser}>
+                        @{replyTo?.author?.username || replyTo?.author?.user_name}
+                      </Text>
+                    </Text>
+                    <TouchableOpacity onPress={() => setReplyTo(null)}>
+                      <Feather name="x" size={16} color={theme.subText} />
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
+                <View style={styles.commentInputRow}>
+                  <TextInput
+                    value={commentText}
+                    onChangeText={setCommentText}
+                    placeholder="Write a comment..."
+                    placeholderTextColor={theme.subText}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    style={[
+                      styles.commentInput,
+                      { color: theme.text, borderColor: theme.border },
+                    ]}
+                    multiline
+                  />
+                  <TouchableOpacity
+                    style={styles.sendBtn}
+                    onPress={handleSendComment}
+                    disabled={commentSubmitting}
+                  >
+                    <Feather
+                      name="send"
+                      size={18}
+                      color={commentSubmitting ? "#94A3B8" : theme.primary}
+                    />
+                  </TouchableOpacity>
+                </View>
               </View>
-              <TouchableOpacity
-                style={[styles.copyBtn, { borderColor: theme.border }]}
-                onPress={handleCopyLink}
-              >
-                <Ionicons
-                  name={linkCopied ? "checkmark" : "copy-outline"}
-                  size={18}
-                  color={linkCopied ? "#10B981" : theme.text}
-                />
-              </TouchableOpacity>
             </View>
-            {linkCopied ? (
-              <Text style={[styles.copiedText, { color: "#10B981" }]}>
-                Copied
-              </Text>
-            ) : null}
-          </View>
-        </View>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
       </Modal>
+
     </View>
   );
 };
@@ -1438,14 +1388,23 @@ export const PostItem = ({
 export default function NewsFeedScreen() {
   const { isDark, screenTheme } = useTheme();
   const router = useRouter();
-  const { postId: routePostId, openComments } = useLocalSearchParams();
+  const {
+    postId: routePostId,
+    openComments,
+    listingCreated,
+    listingCreatedAt,
+  } = useLocalSearchParams();
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [adIndex, setAdIndex] = useState(0);
   const [targetPostId, setTargetPostId] = useState<string | null>(null);
   const [shouldOpenComments, setShouldOpenComments] = useState(false);
+  const [showListingCreatedToast, setShowListingCreatedToast] = useState(false);
   const feedListRef = useRef<FlatList<any>>(null);
+  const listingToastOpacity = useRef(new Animated.Value(0)).current;
+  const listingToastTranslateY = useRef(new Animated.Value(-16)).current;
+  const lastToastKeyRef = useRef<string | null>(null);
 
-  const { feed, isLoading, fetchFeed } = useFeedData(
+  const { feed, isLoading, error, fetchFeed } = useFeedData(
     `${CONFIG.API_ENDPOINT}/api/feed/posts`,
   );
 
@@ -1463,6 +1422,73 @@ export default function NewsFeedScreen() {
       : openComments;
     setShouldOpenComments(openValue === "1" || openValue === "true");
   }, [openComments, routePostId]);
+
+  useEffect(() => {
+    const createdFlag = Array.isArray(listingCreated)
+      ? listingCreated[0]
+      : listingCreated;
+    const createdAt = Array.isArray(listingCreatedAt)
+      ? listingCreatedAt[0]
+      : listingCreatedAt;
+
+    if (createdFlag !== "1" && createdFlag !== "true") return;
+
+    const toastKey = createdAt ? String(createdAt) : "listing-created";
+    if (lastToastKeyRef.current === toastKey) return;
+
+    lastToastKeyRef.current = toastKey;
+    setShowListingCreatedToast(true);
+    fetchFeed(1);
+  }, [fetchFeed, listingCreated, listingCreatedAt]);
+
+  useEffect(() => {
+    if (!showListingCreatedToast) return;
+
+    listingToastOpacity.setValue(0);
+    listingToastTranslateY.setValue(-16);
+
+    const animation = Animated.sequence([
+      Animated.parallel([
+        Animated.timing(listingToastOpacity, {
+          toValue: 1,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.timing(listingToastTranslateY, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.delay(1800),
+      Animated.parallel([
+        Animated.timing(listingToastOpacity, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.timing(listingToastTranslateY, {
+          toValue: -12,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+      ]),
+    ]);
+
+    animation.start(({ finished }) => {
+      if (finished) {
+        setShowListingCreatedToast(false);
+      }
+    });
+
+    return () => {
+      animation.stop();
+    };
+  }, [
+    listingToastOpacity,
+    listingToastTranslateY,
+    showListingCreatedToast,
+  ]);
 
   const theme = screenTheme;
 
@@ -1543,6 +1569,25 @@ export default function NewsFeedScreen() {
 
       {isLoading && feed.length === 0 ? (
         <SkeletonLoader variant="feed" count={3} />
+      ) : error && feed.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Ionicons name="cloud-offline-outline" size={44} color={theme.subText} />
+          <Text style={[styles.emptyTitle, { color: theme.text }]}>
+            Couldn&apos;t load feed
+          </Text>
+          <Text style={[styles.emptySubtext, { color: theme.subText }]}>
+            {error}
+          </Text>
+          <TouchableOpacity
+            style={[styles.retryButton, { borderColor: theme.border }]}
+            onPress={() => fetchFeed(1)}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.retryButtonText, { color: theme.text }]}>
+              Retry
+            </Text>
+          </TouchableOpacity>
+        </View>
       ) : (
         <FlatList
           ref={feedListRef}
@@ -1598,6 +1643,20 @@ export default function NewsFeedScreen() {
           onClose={() => setSidebarVisible(false)}
         />
       )}
+      {showListingCreatedToast ? (
+        <Animated.View
+          style={[
+            styles.listingToast,
+            {
+              opacity: listingToastOpacity,
+              transform: [{ translateY: listingToastTranslateY }],
+            },
+          ]}
+        >
+          <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
+          <Text style={styles.listingToastText}>New listing created</Text>
+        </Animated.View>
+      ) : null}
       <BottomNav />
     </SafeAreaView>
   );
@@ -1781,62 +1840,50 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "flex-end",
   },
+  commentKeyboardAvoid: {
+    flex: 1,
+    justifyContent: "flex-end",
+  },
   commentBackdrop: {
     ...StyleSheet.absoluteFillObject,
   },
   commentModal: {
     height: "60%",
-    padding: 16,
+    maxHeight: "82%",
+    paddingTop: 16,
+    paddingHorizontal: 16,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
   },
-  shareModalOverlay: {
+  emptyState: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.45)",
+    alignItems: "center",
     justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
+    paddingHorizontal: 24,
   },
-  shareModalCard: {
-    width: "100%",
-    maxWidth: 360,
-    borderRadius: 18,
-    padding: 16,
+  emptyTitle: {
+    marginTop: 10,
+    fontSize: 18,
+    fontWeight: "700",
+    textAlign: "center",
   },
-  shareHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
+  emptySubtext: {
+    marginTop: 8,
+    fontSize: 14,
+    textAlign: "center",
+    lineHeight: 20,
   },
-  shareTitle: { fontSize: 16, fontWeight: "700" },
-  shareIconRow: { flexDirection: "row", gap: 12, marginBottom: 16 },
-  shareIconBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  shareLabel: { fontSize: 12, fontWeight: "600", marginBottom: 6 },
-  shareLinkRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  shareLinkBox: {
-    flex: 1,
+  retryButton: {
+    marginTop: 16,
     borderWidth: 1,
     borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
   },
-  shareLinkInput: { fontSize: 13 },
-  copyBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    borderWidth: 1,
-    justifyContent: "center",
-    alignItems: "center",
+  retryButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
   },
-  copiedText: { marginTop: 8, fontSize: 12, fontWeight: "600" },
   commentHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1898,10 +1945,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 6,
+    paddingTop: 6,
+    paddingBottom: 2,
     paddingHorizontal: 8,
+  },
+  commentComposer: {
     borderTopWidth: 1,
     borderTopColor: "rgba(0,0,0,0.05)",
+    paddingTop: 6,
   },
   replyText: { fontSize: 12 },
   replyUser: { color: "#3B66F5", fontWeight: "700" },
@@ -1909,8 +1960,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-end",
     gap: 8,
-    paddingTop: 6,
-    paddingBottom: 4,
+    paddingTop: 4,
   },
   commentInput: {
     flex: 1,
@@ -1920,6 +1970,29 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 8,
+  },
+  listingToast: {
+    position: "absolute",
+    top: 72,
+    alignSelf: "center",
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: "#10B981",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    zIndex: 1500,
+    elevation: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+  },
+  listingToastText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+    fontSize: 13,
   },
   sendBtn: { padding: 8 },
   iconBtn: {

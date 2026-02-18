@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -32,6 +32,7 @@ export default function Sidebar() {
 
   const [userData, setUserData] = useState<any>(null);
   const [imgLoading, setImgLoading] = useState(false);
+  const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
 
   const themeColors = {
     bg: screenTheme.bg,
@@ -41,10 +42,42 @@ export default function Sidebar() {
     toggleTrack: isDark ? screenTheme.primary : "#E2E8F0",
   };
 
-  const formatUrl = (url: string) => {
-    if (!url) return null;
-    return url.replace("http://localhost:8000", CONFIG.API_ENDPOINT);
+  const formatUrl = (url?: string | null) => {
+    const raw = String(url || "").trim();
+    if (!raw) return null;
+
+    if (raw.startsWith("http://") || raw.startsWith("https://")) {
+      return raw
+        .replace("http://localhost:8000", CONFIG.API_ENDPOINT)
+        .replace("https://localhost:8000", CONFIG.API_ENDPOINT);
+    }
+
+    if (raw.startsWith("//")) {
+      return `https:${raw}`;
+    }
+
+    const normalizedPath = raw.startsWith("/") ? raw : `/${raw}`;
+    return `${CONFIG.API_ENDPOINT}${normalizedPath}`;
   };
+
+  const fallbackAvatarUri = useMemo(() => {
+    const name = encodeURIComponent(userData?.name || "User");
+    return `https://ui-avatars.com/api/?name=${name}&background=3B66F5&color=fff`;
+  }, [userData?.name]);
+
+  const resolvedAvatarUri = useMemo(
+    () => formatUrl(userData?.avatar || userData?.avatar_url),
+    [userData?.avatar, userData?.avatar_url],
+  );
+
+  const currentAvatarUri = avatarLoadFailed
+    ? fallbackAvatarUri
+    : resolvedAvatarUri || fallbackAvatarUri;
+
+  useEffect(() => {
+    setAvatarLoadFailed(false);
+    setImgLoading(false);
+  }, [resolvedAvatarUri]);
 
   useEffect(() => {
     const loadSidebarStats = async () => {
@@ -130,15 +163,18 @@ export default function Sidebar() {
               <View style={styles.avatarContainer}>
                 <Image
                   source={{
-                    uri:
-                      formatUrl(userData?.avatar) ||
-                      `https://ui-avatars.com/api/?name=${userData?.name || "User"}&background=3B66F5&color=fff`,
+                    uri: currentAvatarUri,
                   }}
                   style={styles.avatar}
+                  key={currentAvatarUri}
                   onLoadStart={() => setImgLoading(true)}
                   onLoadEnd={() => setImgLoading(false)}
+                  onError={() => {
+                    setImgLoading(false);
+                    setAvatarLoadFailed(true);
+                  }}
                 />
-                {imgLoading && (
+                {imgLoading && !avatarLoadFailed && (
                   <View style={styles.loaderOverlay}>
                     <ActivityIndicator size="small" color="#3B66F5" />
                   </View>

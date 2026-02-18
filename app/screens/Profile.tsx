@@ -7,7 +7,7 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -39,7 +39,7 @@ import WowIcon from "../../assets/reaction/wow.svg";
 import BottomNav from "../../components/BottomNav";
 import SkeletonLoader from "../../components/SkeletonLoader";
 import CONFIG from "../../shared/config";
-import { extractPostSpecs } from "../../shared/postSpecs";
+import { extractPostSpecs, resolvePrimaryTradingFeed } from "../../shared/postSpecs";
 import { useTheme } from "../../shared/themeContext";
 
 const { width } = Dimensions.get("window");
@@ -117,6 +117,30 @@ const getConditionMeta = (value: unknown) => {
     bg: "#EEF2FF",
     text: "#6366F1",
   };
+};
+
+const normalizePostMediaUrl = (value: unknown): string => {
+  const url = String(value || "").trim();
+  if (!url) return "";
+  return url
+    .replace("http://localhost:8000", CONFIG.API_ENDPOINT)
+    .replace("https://localhost:8000", CONFIG.API_ENDPOINT);
+};
+
+const normalizePostMediaUrls = (value: unknown): string[] => {
+  if (!value) return [];
+  const rawItems = Array.isArray(value) ? value : [value];
+  return rawItems
+    .map((item: any) => {
+      if (typeof item === "string") return normalizePostMediaUrl(item);
+      if (item && typeof item === "object") {
+        return normalizePostMediaUrl(
+          item?.url || item?.uri || item?.src || item?.path || item?.image,
+        );
+      }
+      return "";
+    })
+    .filter((url) => url.length > 0);
 };
 
 const REACTION_TYPES = [
@@ -206,6 +230,161 @@ const SpecItem = ({ label, value }: { label: string; value: any }) => (
     </Text>
   </View>
 );
+
+const MEMBER_PAYLOAD_KEYS = [
+  "members",
+  "company_members",
+  "companyMembers",
+  "employees",
+  "team",
+  "staff",
+  "users",
+  "results",
+  "items",
+  "data",
+] as const;
+
+const normalizeLabel = (value: unknown): string => {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number") return String(value);
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const nested = [
+      record.name,
+      record.label,
+      record.title,
+      record.value,
+      record.username,
+      record.companyName,
+    ];
+    for (const item of nested) {
+      const normalized = normalizeLabel(item);
+      if (normalized) return normalized;
+    }
+  }
+  return "";
+};
+
+const resolveMemberArray = (payload: any): any[] => {
+  if (!payload) return [];
+  if (Array.isArray(payload)) return payload;
+  if (typeof payload !== "object") return [];
+
+  for (const key of MEMBER_PAYLOAD_KEYS) {
+    const value = payload?.[key];
+    if (Array.isArray(value)) {
+      return value;
+    }
+  }
+
+  for (const key of MEMBER_PAYLOAD_KEYS) {
+    const nested = resolveMemberArray(payload?.[key]);
+    if (nested.length > 0) return nested;
+  }
+
+  return [];
+};
+
+const normalizeMembers = (rawMembers: any[]) => {
+  const byId = new Map<string, any>();
+
+  rawMembers.forEach((entry) => {
+    if (!entry || typeof entry !== "object") return;
+    const nestedUser =
+      entry?.user && typeof entry.user === "object" ? entry.user : null;
+    const base = nestedUser ? { ...entry, ...nestedUser } : entry;
+
+    const memberId =
+      base?.id ??
+      base?.user_id ??
+      base?.member_id ??
+      base?.profile_id ??
+      base?.uuid ??
+      base?.username ??
+      base?.user_name ??
+      null;
+    if (memberId === null || memberId === undefined) return;
+
+    const memberName =
+      normalizeLabel(base?.name) ||
+      `${normalizeLabel(base?.first_name)} ${normalizeLabel(base?.last_name)}`.trim() ||
+      normalizeLabel(base?.username) ||
+      normalizeLabel(base?.user_name) ||
+      "User";
+
+    const memberUsername =
+      normalizeLabel(base?.username) || normalizeLabel(base?.user_name);
+
+    const memberRole =
+      normalizeLabel(base?.position) ||
+      normalizeLabel(base?.role) ||
+      normalizeLabel(base?.designation) ||
+      normalizeLabel(base?.company_category) ||
+      normalizeLabel(base?.industry) ||
+      "Member";
+
+    const followersRaw =
+      base?.followers_count ??
+      base?.follower_count ??
+      base?.followers ??
+      base?.followersCount ??
+      0;
+    const parsedFollowers = Number(followersRaw);
+    const memberFollowers = Number.isFinite(parsedFollowers) ? parsedFollowers : 0;
+
+    const memberAvatar =
+      normalizeLabel(base?.avatar_url) ||
+      normalizeLabel(base?.avatar) ||
+      normalizeLabel(base?.profile_picture) ||
+      normalizeLabel(base?.image);
+
+    const memberCover =
+      normalizeLabel(base?.cover_url) ||
+      normalizeLabel(base?.cover) ||
+      normalizeLabel(base?.banner) ||
+      normalizeLabel(base?.header_image);
+
+    const normalized = {
+      ...base,
+      _member_id: String(memberId),
+      _member_name: memberName,
+      _member_username: memberUsername,
+      _member_role: memberRole,
+      _member_followers: memberFollowers,
+      _member_avatar: memberAvatar,
+      _member_cover: memberCover,
+    };
+
+    byId.set(normalized._member_id, normalized);
+  });
+
+  return Array.from(byId.values());
+};
+
+const isBusinessProfileData = (data: any) => {
+  const accountType = String(
+    data?.account_type || data?.profile_type || data?.user_type || "",
+  )
+    .trim()
+    .toLowerCase();
+
+  if (accountType.includes("business") || accountType.includes("company")) {
+    return true;
+  }
+  if (accountType.includes("individual") || accountType.includes("personal")) {
+    return false;
+  }
+
+  return Boolean(
+    data?.company_id ||
+      data?.company?.id ||
+      data?.companyName ||
+      data?.company_name ||
+      data?.company_category ||
+      data?.est_year ||
+      data?.industry,
+  );
+};
 
 const CommentItem = ({
   comment,
@@ -478,9 +657,15 @@ const PostItem = ({ item, theme, onSave, canDelete, onDeletePost }: any) => {
   const [commentCount, setCommentCount] =
     useState<number>(initialCommentsCount);
 
-  const tradingData = item.trading_feeds?.[0] || {};
+  const tradingData = useMemo(() => resolvePrimaryTradingFeed(item), [item]);
   const author = item.author || {};
-  const mediaUrls = tradingData.images || item.media || [];
+  const mediaUrls = useMemo(
+    () =>
+      normalizePostMediaUrls(
+        tradingData?.images || tradingData?.media || item?.media || item?.images,
+      ),
+    [item?.images, item?.media, tradingData],
+  );
   const specs = extractPostSpecs(item, tradingData);
   const postId = item.main_post_id ?? item.id;
   const deletePostId = item.id ?? item.main_post_id ?? postId;
@@ -500,11 +685,10 @@ const PostItem = ({ item, theme, onSave, canDelete, onDeletePost }: any) => {
 
   useEffect(() => {
     let active = true;
-    const urls: string[] = item.trading_feeds?.[0]?.images || item.media || [];
     setActiveIndex(0);
     setMediaAspectRatios({});
 
-    const firstUrl = urls[0];
+    const firstUrl = mediaUrls[0];
     if (firstUrl) {
       Image.getSize(
         firstUrl,
@@ -524,7 +708,7 @@ const PostItem = ({ item, theme, onSave, canDelete, onDeletePost }: any) => {
     return () => {
       active = false;
     };
-  }, [item]);
+  }, [mediaUrls]);
 
   // API: Record Interaction Stat
   const postInteractStatTrigger = useCallback(async () => {
@@ -1418,6 +1602,10 @@ export default function ProfileScreen() {
   const [isOwnProfile, setIsOwnProfile] = useState(false);
   const [isFollowingProfile, setIsFollowingProfile] = useState(false);
   const [followActionLoading, setFollowActionLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<"posts" | "members">("posts");
+  const [members, setMembers] = useState<any[]>([]);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [membersError, setMembersError] = useState<string | null>(null);
 
   const theme = screenTheme;
 
@@ -1437,6 +1625,33 @@ export default function ProfileScreen() {
   const fallbackAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(
     profileName,
   )}&background=3B66F5&color=fff`;
+
+  const isBusinessProfile = useMemo(
+    () => isBusinessProfileData(userData),
+    [userData],
+  );
+  const isBusinessAccountType = useMemo(() => {
+    const accountType = String(
+      userData?.account_type || userData?.profile_type || userData?.user_type || "",
+    )
+      .trim()
+      .toLowerCase();
+    return (
+      accountType === "business" ||
+      accountType.includes("business") ||
+      accountType.includes("company")
+    );
+  }, [userData?.account_type, userData?.profile_type, userData?.user_type]);
+  const membersCount = useMemo(() => {
+    const raw =
+      userData?.members_count ??
+      userData?.company_members_count ??
+      userData?.total_members ??
+      members.length;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : members.length;
+  }, [members.length, userData]);
+  const showMembersTab = isBusinessAccountType || isBusinessProfile;
 
   const fetchData = useCallback(async () => {
     try {
@@ -1495,6 +1710,129 @@ export default function ProfileScreen() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    if (!showMembersTab && activeTab === "members") {
+      setActiveTab("posts");
+    }
+  }, [activeTab, showMembersTab]);
+
+  const fetchMembers = useCallback(async () => {
+    if (!isBusinessProfile || !userData) {
+      setMembers([]);
+      setMembersError(null);
+      return;
+    }
+
+    setMembersLoading(true);
+    setMembersError(null);
+
+    try {
+      const profileMembers = normalizeMembers(resolveMemberArray(userData));
+      if (profileMembers.length > 0) {
+        setMembers(profileMembers);
+        return;
+      }
+
+      const userString = await AsyncStorage.getItem("user");
+      if (!userString) {
+        setMembers([]);
+        return;
+      }
+
+      const loggedUser = JSON.parse(userString);
+      const headers = {
+        Authorization: `Bearer ${loggedUser?.token}`,
+      };
+
+      const profileCompanyId =
+        userData?.company_id || userData?.company?.id || userData?.companyId;
+      const rawProfileUserId =
+        userData?.id || (Array.isArray(userId) ? userId[0] : userId);
+      const profileUserId = Number(rawProfileUserId);
+      const profileIdentifier =
+        userData?.username ||
+        userData?.id ||
+        (Array.isArray(userId) ? userId[0] : userId);
+
+      const endpointCandidates: string[] = [];
+
+      if (Number.isFinite(profileUserId) && profileUserId > 0) {
+        endpointCandidates.push(`/api/user/employees/${profileUserId}`);
+      }
+
+      if (profileCompanyId) {
+        endpointCandidates.push(
+          `/api/company/${profileCompanyId}/members`,
+          `/api/company/members/${profileCompanyId}`,
+          `/api/companies/${profileCompanyId}/members`,
+          `/api/company/${profileCompanyId}/users`,
+        );
+      }
+
+      if (profileIdentifier) {
+        endpointCandidates.push(
+          `/api/user/profile/${profileIdentifier}/members`,
+          `/api/user/profile/members/${profileIdentifier}`,
+          `/api/user/company-members/${profileIdentifier}`,
+        );
+      }
+
+      let resolvedMembers: any[] = [];
+
+      for (const endpoint of endpointCandidates) {
+        try {
+          const response = await fetch(`${CONFIG.API_ENDPOINT}${endpoint}`, {
+            method: "GET",
+            headers,
+          });
+          if (!response.ok) continue;
+
+          const json = await response.json();
+          if (json?.status === false) continue;
+
+          const extracted = normalizeMembers(
+            resolveMemberArray(json?.data ?? json),
+          );
+          if (extracted.length > 0) {
+            resolvedMembers = extracted;
+            break;
+          }
+        } catch {}
+      }
+
+      setMembers(resolvedMembers);
+    } catch {
+      setMembers([]);
+      setMembersError("Could not load members right now.");
+    } finally {
+      setMembersLoading(false);
+    }
+  }, [isBusinessProfile, userData, userId]);
+
+  useEffect(() => {
+    fetchMembers();
+  }, [fetchMembers]);
+
+  const openMemberProfile = useCallback(
+    (member: any) => {
+      const targetUserId =
+        member?._member_username ||
+        member?.username ||
+        member?.user_name ||
+        member?._member_id ||
+        member?.id ||
+        member?.user_id;
+
+      if (!targetUserId) return;
+
+      router.push({
+        pathname: "/screens/Profile",
+        params: { userId: String(targetUserId) },
+      });
+    },
+    [router],
+  );
 
   const handleBookmark = useCallback(async (postId: number | string) => {
     if (!postId) return;
@@ -1764,14 +2102,198 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
-        <View
-          style={[styles.tabContainer, { borderBottomColor: theme.border }]}
-        >
-          <Text style={[styles.tabTitle, { color: theme.primary }]}>Posts</Text>
+        <View style={[styles.tabsRow, { borderBottomColor: theme.border }]}>
+          <TouchableOpacity
+            activeOpacity={0.85}
+            style={styles.tabButton}
+            onPress={() => setActiveTab("posts")}
+          >
+            <Text
+              style={[
+                styles.tabTitle,
+                { color: activeTab === "posts" ? theme.primary : theme.subText },
+              ]}
+            >
+              Posts
+            </Text>
+            <View
+              style={[
+                styles.tabIndicator,
+                {
+                  backgroundColor:
+                    activeTab === "posts" ? theme.primary : "transparent",
+                },
+              ]}
+            />
+          </TouchableOpacity>
+
+          {showMembersTab ? (
+            <TouchableOpacity
+              activeOpacity={0.85}
+              style={styles.tabButton}
+              onPress={() => setActiveTab("members")}
+            >
+              <Text
+                style={[
+                  styles.tabTitle,
+                  {
+                    color:
+                      activeTab === "members" ? theme.primary : theme.subText,
+                  },
+                ]}
+              >
+                {membersCount > 0 ? `Members (${membersCount})` : "Members"}
+              </Text>
+              <View
+                style={[
+                  styles.tabIndicator,
+                  {
+                    backgroundColor:
+                      activeTab === "members" ? theme.primary : "transparent",
+                  },
+                ]}
+              />
+            </TouchableOpacity>
+          ) : null}
         </View>
 
         <View style={styles.feedContainer}>
-          {feed.length > 0 ? (
+          {activeTab === "members" && showMembersTab ? (
+            membersLoading ? (
+              <SkeletonLoader
+                variant="membersGrid"
+                count={6}
+                withScroll={false}
+                style={styles.membersSkeletonLoader}
+              />
+            ) : (
+              <View style={styles.membersContainer}>
+                {membersError ? (
+                <Text
+                  style={{
+                    textAlign: "center",
+                    color: theme.subText,
+                    marginTop: 20,
+                  }}
+                >
+                  {membersError}
+                </Text>
+                ) : members.length > 0 ? (
+                  members.map((member) => {
+                  const memberName =
+                    member?._member_name || member?.name || member?.username || "User";
+                  const memberRole =
+                    member?._member_role ||
+                    member?.role ||
+                    member?.designation ||
+                    "Member";
+                  const followerValue = Number(
+                    member?._member_followers ?? member?.followers_count ?? 0,
+                  );
+                  const followerCount = Number.isFinite(followerValue)
+                    ? followerValue
+                    : 0;
+                  const followerLabel = `${followerCount} ${
+                    followerCount === 1 ? "follower" : "followers"
+                  }`;
+                  const memberAvatar =
+                    formatMediaUrl(
+                      member?._member_avatar ||
+                        member?.avatar ||
+                        member?.avatar_url ||
+                        member?.profile_picture,
+                    ) ||
+                    `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                      memberName,
+                    )}&background=3B66F5&color=fff`;
+                  const memberCover = formatMediaUrl(
+                    member?._member_cover ||
+                      member?.cover ||
+                      member?.cover_url ||
+                      member?.banner,
+                  );
+
+                  return (
+                    <View
+                      key={member?._member_id || member?.id || memberName}
+                      style={styles.memberGridItem}
+                    >
+                      <TouchableOpacity
+                        activeOpacity={0.9}
+                        style={[
+                          styles.memberCard,
+                          {
+                            backgroundColor: theme.card,
+                            borderColor: theme.border,
+                          },
+                        ]}
+                        onPress={() => openMemberProfile(member)}
+                      >
+                        <View
+                          style={[
+                            styles.memberCover,
+                            { backgroundColor: theme.isDark ? "#1E293B" : "#E5E7EB" },
+                          ]}
+                        >
+                          {memberCover ? (
+                            <Image
+                              source={{ uri: memberCover }}
+                              style={styles.memberCoverImage}
+                              resizeMode="cover"
+                            />
+                          ) : null}
+                        </View>
+                        <View style={styles.memberAvatarWrap}>
+                          <Image
+                            source={{ uri: memberAvatar }}
+                            style={styles.memberAvatar}
+                            resizeMode="cover"
+                          />
+                        </View>
+                        <Text
+                          numberOfLines={1}
+                          style={[styles.memberName, { color: theme.text }]}
+                        >
+                          {memberName}
+                        </Text>
+                        <Text
+                          numberOfLines={1}
+                          style={[styles.memberRole, { color: theme.subText }]}
+                        >
+                          {memberRole}
+                        </Text>
+                        <Text
+                          numberOfLines={1}
+                          style={[styles.memberFollowers, { color: theme.subText }]}
+                        >
+                          {followerLabel}
+                        </Text>
+                        <View
+                          style={[
+                            styles.memberProfileButton,
+                            { backgroundColor: theme.primary },
+                          ]}
+                        >
+                          <Text style={styles.memberProfileButtonText}>Profile</Text>
+                        </View>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                  })
+                ) : (
+                  <Text
+                    style={{
+                      textAlign: "center",
+                      color: theme.subText,
+                      marginTop: 20,
+                    }}
+                  >
+                    No members available yet.
+                  </Text>
+                )}
+              </View>
+            )
+          ) : feed.length > 0 ? (
             feed.map((post) => (
               <PostItem
                 key={post.id}
@@ -1866,16 +2388,102 @@ const styles = StyleSheet.create({
   stat: { alignItems: "center" },
   statVal: { fontSize: 18, fontWeight: "bold" },
   statLab: { color: "#94A3B8", fontSize: 12 },
-  tabContainer: {
+  tabsRow: {
     marginHorizontal: 20,
     marginTop: 30,
-    borderBottomWidth: 2,
-    paddingBottom: 10,
-    width: 80,
+    borderBottomWidth: 1,
+    flexDirection: "row",
     alignItems: "center",
   },
-  tabTitle: { fontSize: 16, fontWeight: "bold" },
+  tabButton: {
+    flex: 1,
+    paddingBottom: 10,
+    alignItems: "center",
+  },
+  tabTitle: { fontSize: 16, fontWeight: "700", textAlign: "center" },
+  tabIndicator: {
+    marginTop: 8,
+    height: 3,
+    borderRadius: 2,
+    width: "100%",
+  },
   feedContainer: { marginTop: 10 },
+  membersSkeletonLoader: {
+    backgroundColor: "transparent",
+    paddingHorizontal: 15,
+    paddingTop: 6,
+    paddingBottom: 0,
+  },
+  membersContainer: {
+    paddingHorizontal: 15,
+    paddingTop: 6,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+  },
+  memberGridItem: {
+    width: "48.5%",
+    marginBottom: 12,
+  },
+  memberCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    overflow: "hidden",
+    paddingBottom: 10,
+    alignItems: "center",
+  },
+  memberCover: {
+    width: "100%",
+    height: 54,
+  },
+  memberCoverImage: {
+    width: "100%",
+    height: "100%",
+  },
+  memberAvatarWrap: {
+    marginTop: -24,
+    borderRadius: 26,
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+    overflow: "hidden",
+    backgroundColor: "#F1F5F9",
+  },
+  memberAvatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+  },
+  memberName: {
+    marginTop: 8,
+    fontSize: 15,
+    fontWeight: "700",
+    paddingHorizontal: 8,
+  },
+  memberRole: {
+    marginTop: 2,
+    fontSize: 12,
+    fontWeight: "500",
+    paddingHorizontal: 8,
+  },
+  memberFollowers: {
+    marginTop: 8,
+    fontSize: 12,
+    fontWeight: "600",
+    paddingHorizontal: 8,
+  },
+  memberProfileButton: {
+    marginTop: 8,
+    minWidth: 88,
+    borderRadius: 10,
+    paddingVertical: 7,
+    paddingHorizontal: 16,
+    alignItems: "center",
+  },
+  memberProfileButtonText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "700",
+  },
   postCard: {
     marginHorizontal: 15,
     marginVertical: 10,

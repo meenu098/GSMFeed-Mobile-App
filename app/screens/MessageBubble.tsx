@@ -10,6 +10,7 @@ import {
   AppState,
   FlatList,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -75,6 +76,7 @@ export default function IndividualChatScreen() {
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [deletingChat, setDeletingChat] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollingInFlightRef = useRef(false);
@@ -375,6 +377,19 @@ export default function IndividualChatScreen() {
     };
   }, [chatIdValue, pollMessages, startPolling, stopPolling]);
 
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const showSub = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
+    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
   const handleSendMessage = async () => {
     if (!inputText.trim()) return;
     const userString = await AsyncStorage.getItem("user");
@@ -442,36 +457,48 @@ export default function IndividualChatScreen() {
           )}
         </TouchableOpacity>
       </View>
-      {loading ? (
-        <SkeletonLoader variant="chat" count={6} withScroll={false} />
-      ) : (
-        <FlatList
-          ref={flatListRef}
-          data={messages}
-          keyExtractor={(item, index) => String(item?.id ?? item?.message_id ?? index)}
-          onContentSizeChange={() =>
-            flatListRef.current?.scrollToEnd({ animated: true })
-          }
-          renderItem={({ item }) => (
-            <MessageBubble
-              item={item}
-              theme={theme}
-              isDark={isDark}
-              currentUserId={currentUserId}
-            />
-          )}
-          contentContainerStyle={styles.listContent}
-        />
-      )}
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={90}
+        style={styles.chatContent}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={0}
       >
+        {loading ? (
+          <SkeletonLoader variant="chat" count={6} withScroll={false} />
+        ) : (
+          <FlatList
+            ref={flatListRef}
+            data={messages}
+            style={styles.messagesList}
+            keyExtractor={(item, index) =>
+              String(item?.id ?? item?.message_id ?? index)
+            }
+            onContentSizeChange={() =>
+              flatListRef.current?.scrollToEnd({ animated: true })
+            }
+            renderItem={({ item }) => (
+              <MessageBubble
+                item={item}
+                theme={theme}
+                isDark={isDark}
+                currentUserId={currentUserId}
+              />
+            )}
+            contentContainerStyle={styles.listContent}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode={
+              Platform.OS === "ios" ? "interactive" : "on-drag"
+            }
+          />
+        )}
         <View
           style={[
             styles.inputWrapper,
             {
-              paddingBottom: insets.bottom + 15,
+              paddingBottom: keyboardVisible
+                ? 8
+                : Platform.OS === "ios"
+                  ? Math.max(insets.bottom, 10)
+                  : 12,
               borderTopColor: theme.border,
               backgroundColor: theme.bg,
             },
@@ -506,6 +533,7 @@ export default function IndividualChatScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  chatContent: { flex: 1 },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -530,7 +558,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  listContent: { padding: 15 },
+  messagesList: { flex: 1 },
+  listContent: {
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    flexGrow: 1,
+    justifyContent: "flex-end",
+  },
   messageRow: { flexDirection: "row", marginBottom: 12, gap: 10 },
   myRow: { justifyContent: "flex-end" },
   theirRow: { justifyContent: "flex-start" },

@@ -9,6 +9,7 @@ import {
   FlatList,
   Image,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -31,6 +32,12 @@ type SelectOption = {
   storages?: unknown;
 };
 
+type SelectedImage = {
+  uri: string;
+  name: string;
+  type: string;
+};
+
 interface FormTemplateProps {
   type: "Sell" | "Buy";
   initialData?: any;
@@ -38,26 +45,83 @@ interface FormTemplateProps {
   onBack: () => void;
 }
 
-const normalizeImageUris = (value: unknown): string[] => {
+const extensionToMimeType: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  gif: "image/gif",
+  bmp: "image/bmp",
+  heic: "image/heic",
+  heif: "image/heif",
+};
+
+const inferFileMeta = (
+  uri: string,
+  index: number,
+): { name: string; type: string } => {
+  const cleanUri = uri.split("?")[0] || uri;
+  const fileNameCandidate = cleanUri.split("/").pop() || "";
+  const hasExtension = fileNameCandidate.includes(".");
+  const generatedName = `photo-${Date.now()}-${index}.jpg`;
+  const name = hasExtension ? fileNameCandidate : generatedName;
+  const extension = name.split(".").pop()?.toLowerCase() || "jpg";
+  const type = extensionToMimeType[extension] || "image/jpeg";
+  return { name, type };
+};
+
+const normalizeMimeType = (
+  value: unknown,
+  fallbackType: string,
+): string => {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw || raw === "image" || raw === "file") return fallbackType;
+  if (raw.startsWith("image/")) return raw;
+  return extensionToMimeType[raw] || fallbackType;
+};
+
+const normalizeSelectedImages = (value: unknown): SelectedImage[] => {
   if (!value) return [];
 
-  if (Array.isArray(value)) {
-    return value
-      .map((item: any) => {
-        if (typeof item === "string") return item;
-        if (item && typeof item === "object" && typeof item.uri === "string") {
-          return item.uri;
-        }
-        return "";
-      })
-      .filter((uri) => uri.length > 0);
-  }
+  const inputItems = Array.isArray(value) ? value : [value];
+  const output: SelectedImage[] = [];
+  const seenUris = new Set<string>();
 
-  if (typeof value === "string") {
-    return value.trim().length > 0 ? [value] : [];
-  }
+  inputItems.forEach((item: any, index) => {
+    let uri = "";
+    let name = "";
+    let type = "";
 
-  return [];
+    if (typeof item === "string") {
+      uri = item.trim();
+      if (!uri) return;
+      const inferred = inferFileMeta(uri, index);
+      name = inferred.name;
+      type = inferred.type;
+    } else if (item && typeof item === "object" && typeof item.uri === "string") {
+      uri = item.uri.trim();
+      if (!uri) return;
+      const inferred = inferFileMeta(uri, index);
+      name =
+        (typeof item.name === "string" && item.name.trim()) ||
+        (typeof item.fileName === "string" && item.fileName.trim()) ||
+        inferred.name;
+      type = normalizeMimeType(
+        (typeof item.type === "string" && item.type.trim()) ||
+          (typeof item.mimeType === "string" && item.mimeType.trim()) ||
+          inferred.type,
+        inferred.type,
+      );
+    } else {
+      return;
+    }
+
+    if (seenUris.has(uri)) return;
+    seenUris.add(uri);
+    output.push({ uri, name, type });
+  });
+
+  return output;
 };
 
 const FormTemplate = ({
@@ -104,8 +168,8 @@ const FormTemplate = ({
 
   const [currency, setCurrency] = useState(initialData?.currency || "USD");
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
-  const [selectedImages, setSelectedImages] = useState<string[]>(
-    normalizeImageUris(initialData?.images),
+  const [selectedImages, setSelectedImages] = useState<SelectedImage[]>(
+    normalizeSelectedImages(initialData?.images),
   );
   const [extraDetails, setExtraDetails] = useState<
     { label: string; value: string }[]
@@ -133,7 +197,7 @@ const FormTemplate = ({
     setPrice(initialData?.price ? String(initialData.price) : "");
     setQuantity(initialData?.quantity ? String(initialData.quantity) : "");
     setCurrency(initialData?.currency || "USD");
-    setSelectedImages(normalizeImageUris(initialData?.images));
+    setSelectedImages(normalizeSelectedImages(initialData?.images));
     setExtraDetails(
       Array.isArray(initialData?.extraDetails) ? initialData.extraDetails : [],
     );
@@ -347,19 +411,34 @@ const FormTemplate = ({
         return;
       }
 
-      const result = await ImagePicker.launchImageLibraryAsync({
+      const pickerOptions: ImagePicker.ImagePickerOptions = {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsMultipleSelection: true,
         selectionLimit: Math.max(1, MAX_PHOTOS - selectedImages.length),
         quality: 1,
-      });
+      };
+
+      const compatibleMode = (ImagePicker as any)
+        ?.UIImagePickerPreferredAssetRepresentationMode?.Compatible;
+      if (Platform.OS === "ios" && compatibleMode) {
+        (pickerOptions as any).preferredAssetRepresentationMode = compatibleMode;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync(pickerOptions);
 
       if (result.canceled || !result.assets?.length) return;
 
-      const newImages = normalizeImageUris(result.assets);
-      setSelectedImages((prev) =>
-        Array.from(new Set([...prev, ...newImages])).slice(0, MAX_PHOTOS),
-      );
+      const newImages = normalizeSelectedImages(result.assets);
+      setSelectedImages((prev) => {
+        const merged = [...prev];
+        const seenUris = new Set(prev.map((item) => item.uri));
+        newImages.forEach((item) => {
+          if (seenUris.has(item.uri)) return;
+          seenUris.add(item.uri);
+          merged.push(item);
+        });
+        return merged.slice(0, MAX_PHOTOS);
+      });
     } catch (error) {
       console.error("Image picker error:", error);
       Alert.alert("Error", "Could not open photo library.");
@@ -888,9 +967,9 @@ const FormTemplate = ({
               <Text style={styles.addPhotoText}>Add</Text>
             </TouchableOpacity>
 
-            {selectedImages.map((uri, index) => (
+            {selectedImages.map((image, index) => (
               <View
-                key={`${uri}-${index}`}
+                key={`${image.uri}-${index}`}
                 style={[
                   styles.selectedPhotoBox,
                   {
@@ -898,7 +977,7 @@ const FormTemplate = ({
                   },
                 ]}
               >
-                <Image source={{ uri }} style={styles.imagePreview} />
+                <Image source={{ uri: image.uri }} style={styles.imagePreview} />
                 <TouchableOpacity
                   onPress={() => removeImage(index)}
                   style={styles.removePhotoBtn}
