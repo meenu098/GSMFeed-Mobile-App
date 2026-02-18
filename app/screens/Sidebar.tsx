@@ -16,6 +16,7 @@ import {
   ContactsMenuIcons,
   MarketingIcon,
   MarketPlaceMenuIcons,
+  MyAppsIcon,
   NewsFeedMenuIcons,
   Settings,
 } from "../../components/icons/sidebarIcon";
@@ -85,7 +86,7 @@ export default function Sidebar() {
           // Update storage so all components benefit from fresh data
           await AsyncStorage.setItem("user", JSON.stringify(updatedData));
         }
-      } catch (error) {
+      } catch {
       }
     };
 
@@ -113,6 +114,7 @@ export default function Sidebar() {
       label: "Notifications",
       screen: "/screens/Notifications",
     },
+    { icon: MyAppsIcon, label: "Apps", screen: "/screens/Apps" },
     { icon: Settings, label: "Settings", screen: "/screens/Settings" },
   ];
 
