@@ -14,6 +14,11 @@ const isTruthyFlag = (value: unknown) => {
   return false;
 };
 
+const hasValidSessionToken = (user: any) => {
+  const token = user?.token;
+  return typeof token === "string" && token.trim().length > 0;
+};
+
 const hasOnboardingFlag = (user: any) => {
   return (
     user &&
@@ -117,7 +122,7 @@ export const parseStoredUser = (rawUser: string | null) => {
 };
 
 export const resolveAuthenticatedRoute = (user: any): AuthRoute => {
-  if (!user) return "/screens/auth/Login";
+  if (!user || !hasValidSessionToken(user)) return "/screens/auth/Login";
 
   const approved = isApproved(user);
   if (approved && !hasOnboardingFlag(user)) {

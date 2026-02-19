@@ -1,5 +1,5 @@
 import React from "react";
-import { Image, Platform, StyleProp, ImageStyle } from "react-native";
+import { DimensionValue, Image, ImageStyle, Platform, StyleProp } from "react-native";
 import { SvgUri } from "react-native-svg";
 
 type WebSvgProps = {
@@ -9,11 +9,13 @@ type WebSvgProps = {
   style?: StyleProp<ImageStyle>;
 };
 
-const normalizeSize = (value?: number | string) => {
+const normalizeSize = (value?: number | string): DimensionValue | undefined => {
   if (value === undefined || value === null) return undefined;
   if (typeof value === "number") return value;
   const trimmed = value.trim();
-  if (trimmed.endsWith("%")) return trimmed;
+  if (/^\d+(\.\d+)?%$/.test(trimmed)) {
+    return trimmed as DimensionValue;
+  }
   const numeric = Number(trimmed);
   return Number.isNaN(numeric) ? undefined : numeric;
 };

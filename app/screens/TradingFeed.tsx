@@ -34,6 +34,52 @@ import { useTheme } from "../../shared/themeContext";
 
 const LIMIT = 30;
 
+type IdValue = string | number;
+
+type CountryOption = {
+  code: string;
+  name: string;
+};
+
+type SelectionOption = {
+  id: IdValue;
+  name: string;
+  label?: string;
+};
+
+type ProductOption = {
+  id: IdValue;
+  name: string;
+  brand?: string;
+  category?: string;
+};
+
+type PickerOption = CountryOption | SelectionOption;
+
+type TradingFilters = {
+  country: CountryOption | null;
+  category: SelectionOption | null;
+  type: "wts" | "wtb" | null;
+  condition: "new" | "used" | null;
+  brand: SelectionOption | null;
+  grade: SelectionOption | null;
+  color: SelectionOption | null;
+  spec: SelectionOption | null;
+  storage: SelectionOption | null;
+};
+
+const createDefaultFilters = (): TradingFilters => ({
+  country: null,
+  category: null,
+  type: null,
+  condition: null,
+  brand: null,
+  grade: null,
+  color: null,
+  spec: null,
+  storage: null,
+});
+
 type PickerType =
   | "country"
   | "category"
@@ -58,24 +104,14 @@ const TradingFeed = () => {
   const [sortOpen, setSortOpen] = useState(false);
 
   const [filterOpen, setFilterOpen] = useState(false);
-  const [filters, setFilters] = useState({
-    country: null,
-    category: null,
-    type: null,
-    condition: null,
-    brand: null,
-    grade: null,
-    color: null,
-    spec: null,
-    storage: null,
-  });
+  const [filters, setFilters] = useState<TradingFilters>(createDefaultFilters());
   const [activePicker, setActivePicker] = useState<PickerType | null>(null);
   const [pickerSearch, setPickerSearch] = useState("");
-  const [pickerOptions, setPickerOptions] = useState<any[]>([]);
+  const [pickerOptions, setPickerOptions] = useState<PickerOption[]>([]);
   const [pickerLoading, setPickerLoading] = useState(false);
 
-  const [selectedProduct, setSelectedProduct] = useState<any>(null);
-  const [productOptions, setProductOptions] = useState<any[]>([]);
+  const [selectedProduct, setSelectedProduct] = useState<ProductOption | null>(null);
+  const [productOptions, setProductOptions] = useState<ProductOption[]>([]);
   const [productLoading, setProductLoading] = useState(false);
   const [productOpen, setProductOpen] = useState(false);
 
@@ -98,7 +134,7 @@ const TradingFeed = () => {
     sortOptions.find((option) => option.value === sortBy)?.label ||
     "Newest First";
 
-  const countryOptions = useMemo(() => {
+  const countryOptions = useMemo<CountryOption[]>(() => {
     return Object.entries(countries)
       .map(([code, data]) => ({ code, name: data.name }))
       .sort((a, b) => a.name.localeCompare(b.name));
@@ -149,44 +185,41 @@ const TradingFeed = () => {
   };
 
   const clearFilters = () => {
-    setFilters({
-      country: null,
-      category: null,
-      type: null,
-      condition: null,
-      brand: null,
-      grade: null,
-      color: null,
-      spec: null,
-      storage: null,
-    });
+    setFilters(createDefaultFilters());
   };
 
   const toggleType = (value: "wts" | "wtb") => {
-    setFilters((prev: any) => ({
+    setFilters((prev) => ({
       ...prev,
       type: prev.type === value ? null : value,
     }));
   };
 
   const toggleCondition = (value: "new" | "used") => {
-    setFilters((prev: any) => ({
+    setFilters((prev) => ({
       ...prev,
       condition: prev.condition === value ? null : value,
     }));
   };
 
-  const flattenCategories = (nodes: any[], prefix = "") => {
-    const items: any[] = [];
-    nodes.forEach((node) => {
-      const label = prefix ? `${prefix} / ${node.name}` : node.name;
-      items.push({ id: node.id, name: node.name, label });
-      if (node.children && node.children.length) {
-        items.push(...flattenCategories(node.children, label));
-      }
-    });
-    return items;
-  };
+  const flattenCategories = useCallback(
+    function flattenCategoriesTree(
+      nodes: any[],
+      prefix = "",
+    ): SelectionOption[] {
+      const items: SelectionOption[] = [];
+      nodes.forEach((node) => {
+        const nodeName = String(node?.name || "");
+        const label = prefix ? `${prefix} / ${nodeName}` : nodeName;
+        items.push({ id: node?.id as IdValue, name: nodeName, label });
+        if (node.children && node.children.length) {
+          items.push(...flattenCategoriesTree(node.children, label));
+        }
+      });
+      return items;
+    },
+    [],
+  );
 
   useEffect(() => {
     if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -273,12 +306,18 @@ const TradingFeed = () => {
         const json = await response.json();
         if (!isActive) return;
         if (activePicker === "category") {
-          const flat = flattenCategories(json.status ? json.data || [] : []);
+          const flat = flattenCategories(
+            json.status && Array.isArray(json.data) ? json.data : [],
+          );
           setPickerOptions(flat);
         } else {
-          setPickerOptions(json.status ? json.data || [] : []);
+          setPickerOptions(
+            json.status && Array.isArray(json.data)
+              ? (json.data as SelectionOption[])
+              : [],
+          );
         }
-      } catch (error) {
+      } catch {
         if (isActive) setPickerOptions([]);
       } finally {
         if (isActive) setPickerLoading(false);
@@ -289,7 +328,7 @@ const TradingFeed = () => {
       isActive = false;
       clearTimeout(timeout);
     };
-  }, [activePicker, pickerSearch, countryOptions]);
+  }, [activePicker, pickerSearch, countryOptions, flattenCategories]);
 
 
   const handleSearchChange = (value: string) => {
@@ -340,9 +379,13 @@ const TradingFeed = () => {
         );
         const json = await response.json();
         if (isActive) {
-          setProductOptions(json.status ? json.data || [] : []);
+          setProductOptions(
+            json.status && Array.isArray(json.data)
+              ? (json.data as ProductOption[])
+              : [],
+          );
         }
-      } catch (error) {
+      } catch {
         if (isActive) setProductOptions([]);
       } finally {
         if (isActive) setProductLoading(false);
@@ -363,6 +406,34 @@ const TradingFeed = () => {
     border: screenTheme.border,
     primary: screenTheme.primary,
     chipBg: isDark ? "#111827" : "#F1F5F9",
+  };
+
+  const getPickerItemKey = (item: PickerOption, index: number) =>
+    "id" in item ? String(item.id) : `${item.code}-${index}`;
+
+  const getPickerItemLabel = (item: PickerOption) => {
+    if ("code" in item) {
+      return `${item.name} (${item.code})`;
+    }
+    if (activePicker === "category") {
+      return item.label || item.name;
+    }
+    return item.name;
+  };
+
+  const applyPickerSelection = (picker: PickerType, item: PickerOption) => {
+    if (picker === "country") {
+      if (!("code" in item)) return;
+      setFilters((prev) => ({ ...prev, country: item }));
+      return;
+    }
+
+    if ("id" in item) {
+      setFilters((prev) => ({
+        ...prev,
+        [picker]: item,
+      }));
+    }
   };
 
   const resolveUrl = (url?: string | null) => {
@@ -569,7 +640,7 @@ const TradingFeed = () => {
           initialMessage: content,
         },
       });
-    } catch (error) {
+    } catch {
       Alert.alert("Network Error", "Please check your connection.");
     } finally {
       setSendingMessage(false);
@@ -647,7 +718,7 @@ const TradingFeed = () => {
             : records.length === LIMIT;
           setHasMore(nextHasMore);
         }
-      } catch (error) {
+      } catch {
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -1425,35 +1496,16 @@ const TradingFeed = () => {
                 ) : (
                   <FlatList
                     data={pickerOptions}
-                    keyExtractor={(item, index) => String(item.id || item.code || index)}
+                    keyExtractor={getPickerItemKey}
                     keyboardShouldPersistTaps="handled"
                     renderItem={({ item }) => {
-                      const label =
-                        activePicker === "country"
-                          ? `${item.name} (${item.code})`
-                          : activePicker === "category"
-                            ? item.label || item.name
-                            : item.name;
+                      const label = getPickerItemLabel(item);
                       return (
                         <TouchableOpacity
                           style={[styles.pickerRow, { borderBottomColor: theme.border }]}
                           onPress={() => {
                             if (!activePicker) return;
-                            if (activePicker === "country") {
-                              setFilters((prev: any) => ({ ...prev, country: item }));
-                            } else if (activePicker === "category") {
-                              setFilters((prev: any) => ({ ...prev, category: item }));
-                            } else if (activePicker === "brand") {
-                              setFilters((prev: any) => ({ ...prev, brand: item }));
-                            } else if (activePicker === "grade") {
-                              setFilters((prev: any) => ({ ...prev, grade: item }));
-                            } else if (activePicker === "color") {
-                              setFilters((prev: any) => ({ ...prev, color: item }));
-                            } else if (activePicker === "spec") {
-                              setFilters((prev: any) => ({ ...prev, spec: item }));
-                            } else if (activePicker === "storage") {
-                              setFilters((prev: any) => ({ ...prev, storage: item }));
-                            }
+                            applyPickerSelection(activePicker, item);
                             closePicker();
                           }}
                         >

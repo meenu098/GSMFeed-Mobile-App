@@ -27,6 +27,10 @@ const Index = () => {
 
   useEffect(() => {
     let mounted = true;
+    const fallbackTimer = setTimeout(() => {
+      if (mounted) setChecking(false);
+    }, 3000);
+
     const checkAuth = async () => {
       try {
         const rawUser = await AsyncStorage.getItem("user");
@@ -43,6 +47,7 @@ const Index = () => {
 
     checkAuth();
     return () => {
+      clearTimeout(fallbackTimer);
       mounted = false;
     };
   }, [router]);

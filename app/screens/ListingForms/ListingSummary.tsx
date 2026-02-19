@@ -23,6 +23,20 @@ interface ListingSummaryProps {
   listingData: any;
 }
 
+type ListingProduct = {
+  model?: string;
+  currency?: string;
+  price?: string | number;
+  condition?: string;
+  grade?: string;
+  storage?: string;
+  color?: string;
+  quantity?: string | number;
+  specs?: string;
+  description?: string;
+  images?: unknown;
+};
+
 const normalizeImageUris = (value: unknown): string[] => {
   if (!value) return [];
   if (Array.isArray(value)) {
@@ -73,12 +87,12 @@ const ListingSummary = ({
     labelBg: isDark ? "#1E293B" : "#F1F5F9",
   };
 
-  const products = useMemo(() => {
+  const products = useMemo<ListingProduct[]>(() => {
     if (Array.isArray(listingData?.products) && listingData.products.length > 0) {
-      return listingData.products;
+      return listingData.products as ListingProduct[];
     }
     if (listingData?.model || listingData?.price || listingData?.quantity) {
-      return [listingData];
+      return [listingData as ListingProduct];
     }
     return [];
   }, [listingData]);

@@ -110,7 +110,7 @@ const OpenAISvg = ({ color = "#000", ...props }: IconProps) => {
           />
         </ClipPath>
       </Defs>
-      <G id="Group_78570" data-name="Group 78570" clip-path="url(#clip-path)">
+      <G id="Group_78570" data-name="Group 78570" clipPath="url(#clip-path)">
         <Path
           id="Path_148322"
           data-name="Path 148322"

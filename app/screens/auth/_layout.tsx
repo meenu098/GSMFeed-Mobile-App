@@ -13,6 +13,10 @@ export default function AuthLayout() {
 
   useEffect(() => {
     let mounted = true;
+    const fallbackTimer = setTimeout(() => {
+      if (mounted) setChecking(false);
+    }, 3000);
+
     const checkAuth = async () => {
       try {
         const rawUser = await AsyncStorage.getItem("user");
@@ -29,6 +33,7 @@ export default function AuthLayout() {
 
     checkAuth();
     return () => {
+      clearTimeout(fallbackTimer);
       mounted = false;
     };
   }, [router]);
